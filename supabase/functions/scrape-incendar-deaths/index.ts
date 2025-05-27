@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts"
@@ -21,62 +20,224 @@ async function scrapeIncendarDeaths(): Promise<CelebrityDeath[]> {
     const response = await fetch('https://incendar.com/deathclock-recent-high-profile-media-famous-deaths-in-us-united-states.php');
     const html = await response.text();
     
+    console.log('HTML length:', html.length);
+    
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const deaths: CelebrityDeath[] = [];
     
-    // Look for death entries - this may need adjustment based on the actual HTML structure
-    const deathElements = doc.querySelectorAll('tr, .death-entry, .celebrity-death');
+    // Try multiple selectors to find death entries
+    const possibleSelectors = [
+      'table tr',
+      'tbody tr', 
+      '.death-entry',
+      '.celebrity-death',
+      'tr',
+      'div[class*="death"]',
+      'div[class*="celebrity"]',
+      'li',
+      'p'
+    ];
     
-    for (const element of deathElements) {
-      try {
-        const text = element.textContent || '';
+    let foundElements = 0;
+    
+    for (const selector of possibleSelectors) {
+      const elements = doc.querySelectorAll(selector);
+      console.log(`Selector "${selector}" found ${elements.length} elements`);
+      
+      if (elements.length > foundElements) {
+        foundElements = elements.length;
         
-        // Try to extract name, date, and age from text patterns
-        // Look for patterns like "Name, Age, Date" or similar
-        const nameMatch = text.match(/^([^,]+)/);
-        const ageMatch = text.match(/age (\d+)|(\d+) years old/i);
-        const dateMatch = text.match(/\b(\d{1,2}[-\/]\d{1,2}[-\/]\d{4}|\w+ \d{1,2}, \d{4})\b/);
-        
-        if (nameMatch && dateMatch) {
-          const name = nameMatch[1].trim();
-          const dateStr = dateMatch[1];
-          const age = ageMatch ? parseInt(ageMatch[1] || ageMatch[2]) : undefined;
+        // Process elements with this selector
+        for (let i = 0; i < Math.min(elements.length, 100); i++) { // Limit to prevent too much logging
+          const element = elements[i];
+          const text = element.textContent || '';
           
-          // Parse date to standard format
-          let dateOfDeath: string;
+          // Skip very short text or headers
+          if (text.length < 10) continue;
+          
+          console.log(`Element ${i} text:`, text.substring(0, 200));
+          
           try {
-            const parsedDate = new Date(dateStr);
-            if (!isNaN(parsedDate.getTime())) {
-              dateOfDeath = parsedDate.toISOString().split('T')[0];
-            } else {
-              continue;
+            // Try to parse death information from text
+            const death = parseDeathFromText(text);
+            if (death) {
+              deaths.push(death);
+              console.log('Parsed death:', death);
             }
-          } catch {
+          } catch (error) {
+            // Continue processing other elements
             continue;
           }
-          
-          // Only include deaths from 2025
-          if (dateOfDeath.startsWith('2025')) {
-            deaths.push({
-              name,
-              dateOfDeath,
-              age,
-              cause: undefined
-            });
-          }
         }
-      } catch (error) {
-        console.error('Error parsing death element:', error);
-        continue;
+        
+        // If we found deaths with this selector, use them
+        if (deaths.length > 0) {
+          console.log(`Successfully parsed ${deaths.length} deaths using selector: ${selector}`);
+          break;
+        }
       }
     }
     
-    console.log(`Found ${deaths.length} deaths from Incendar`);
+    // If no structured parsing worked, try to find patterns in the entire text
+    if (deaths.length === 0) {
+      console.log('No deaths found with selectors, trying full text parsing...');
+      const fullText = doc.body?.textContent || '';
+      console.log('Full text length:', fullText.length);
+      
+      // Look for death patterns in the full text
+      const deathPatterns = parseDeathsFromFullText(fullText);
+      deaths.push(...deathPatterns);
+    }
+    
+    console.log(`Total deaths found: ${deaths.length}`);
     return deaths;
   } catch (error) {
     console.error('Error scraping Incendar:', error);
     return [];
   }
+}
+
+function parseDeathFromText(text: string): CelebrityDeath | null {
+  // Clean up text
+  const cleanText = text.replace(/\s+/g, ' ').trim();
+  
+  // Multiple parsing strategies
+  const strategies = [
+    // Strategy 1: "Name, Age, Date" format
+    {
+      regex: /^([^,]+),\s*(?:age\s*)?(\d+),?\s*(.+)$/i,
+      nameIndex: 1,
+      ageIndex: 2,
+      dateIndex: 3
+    },
+    // Strategy 2: "Name (Age) - Date" format
+    {
+      regex: /^([^(]+)\s*\((\d+)\)\s*[-–]\s*(.+)$/,
+      nameIndex: 1,
+      ageIndex: 2,
+      dateIndex: 3
+    },
+    // Strategy 3: "Name - Age - Date" format
+    {
+      regex: /^([^-]+)\s*[-–]\s*(\d+)\s*[-–]\s*(.+)$/,
+      nameIndex: 1,
+      ageIndex: 2,
+      dateIndex: 3
+    },
+    // Strategy 4: Date first "Date: Name, Age"
+    {
+      regex: /(\d{1,2}[-\/]\d{1,2}[-\/]\d{4}|\w+\s+\d{1,2},?\s+\d{4}).*?([A-Z][^,]+),?\s*(?:age\s*)?(\d+)/i,
+      nameIndex: 2,
+      ageIndex: 3,
+      dateIndex: 1
+    },
+    // Strategy 5: Just name and age, look for date nearby
+    {
+      regex: /([A-Z][a-zA-Z\s]+[a-zA-Z]),?\s*(?:age\s*)?(\d+)/,
+      nameIndex: 1,
+      ageIndex: 2,
+      dateIndex: 0 // Will look for date separately
+    }
+  ];
+  
+  for (const strategy of strategies) {
+    const match = cleanText.match(strategy.regex);
+    if (match) {
+      const name = match[strategy.nameIndex]?.trim();
+      const ageStr = match[strategy.ageIndex];
+      const dateStr = strategy.dateIndex > 0 ? match[strategy.dateIndex]?.trim() : null;
+      
+      if (name && ageStr) {
+        const age = parseInt(ageStr);
+        if (age > 0 && age < 150) { // Reasonable age range
+          let dateOfDeath: string | null = null;
+          
+          if (dateStr) {
+            dateOfDeath = parseDate(dateStr);
+          } else {
+            // Look for date in the surrounding text
+            const dateMatch = cleanText.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{4}|\w+\s+\d{1,2},?\s+\d{4})/);
+            if (dateMatch) {
+              dateOfDeath = parseDate(dateMatch[1]);
+            }
+          }
+          
+          if (dateOfDeath) {
+            return {
+              name: name.replace(/[^\w\s]/g, '').trim(),
+              dateOfDeath,
+              age
+            };
+          }
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+function parseDeathsFromFullText(fullText: string): CelebrityDeath[] {
+  const deaths: CelebrityDeath[] = [];
+  
+  // Split text into lines and try to find death entries
+  const lines = fullText.split('\n').filter(line => line.trim().length > 10);
+  
+  for (const line of lines) {
+    const death = parseDeathFromText(line);
+    if (death) {
+      deaths.push(death);
+    }
+  }
+  
+  return deaths;
+}
+
+function parseDate(dateStr: string): string | null {
+  try {
+    // Remove extra whitespace and clean up
+    const cleaned = dateStr.trim().replace(/\s+/g, ' ');
+    
+    // Try different date formats
+    const formats = [
+      // MM/DD/YYYY or MM-DD-YYYY
+      /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,
+      // Month DD, YYYY
+      /(\w+)\s+(\d{1,2}),?\s+(\d{4})/,
+      // DD Month YYYY
+      /(\d{1,2})\s+(\w+)\s+(\d{4})/
+    ];
+    
+    for (const format of formats) {
+      const match = cleaned.match(format);
+      if (match) {
+        let date: Date;
+        
+        if (format === formats[0]) { // MM/DD/YYYY format
+          const month = parseInt(match[1]);
+          const day = parseInt(match[2]);
+          const year = parseInt(match[3]);
+          date = new Date(year, month - 1, day);
+        } else { // Text month formats
+          date = new Date(cleaned);
+        }
+        
+        if (!isNaN(date.getTime()) && date.getFullYear() >= 2020) {
+          return date.toISOString().split('T')[0];
+        }
+      }
+    }
+    
+    // Fallback: try direct parsing
+    const directDate = new Date(cleaned);
+    if (!isNaN(directDate.getTime()) && directDate.getFullYear() >= 2020) {
+      return directDate.toISOString().split('T')[0];
+    }
+  } catch (error) {
+    console.log('Date parsing error for:', dateStr, error);
+  }
+  
+  return null;
 }
 
 async function processDeaths(supabase: any, deaths: CelebrityDeath[], logId: string) {
@@ -272,8 +433,15 @@ serve(async (req) => {
       })
       .eq('id', logEntry.id);
     
-    // Process and store deaths
-    const { deathsAdded, picksScored } = await processDeaths(supabaseClient, deaths, logEntry.id);
+    // Process and store deaths (filter for recent years, not just 2025)
+    const recentDeaths = deaths.filter(death => {
+      const deathYear = new Date(death.dateOfDeath).getFullYear();
+      return deathYear >= 2024; // Include 2024 and 2025
+    });
+    
+    console.log(`Filtered to ${recentDeaths.length} recent deaths (2024+)`);
+    
+    const { deathsAdded, picksScored } = await processDeaths(supabaseClient, recentDeaths, logEntry.id);
     
     // Complete the log
     await supabaseClient
@@ -288,6 +456,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         totalDeaths: deaths.length,
+        recentDeaths: recentDeaths.length,
         deathsAdded,
         picksScored,
         source: 'Incendar',
