@@ -45,6 +45,8 @@ export type Database = {
       deceased_celebrities: {
         Row: {
           age_at_death: number
+          approved_at: string | null
+          approved_by_admin_id: string | null
           canonical_name: string
           cause_of_death_category: string | null
           cause_of_death_details: string | null
@@ -58,6 +60,7 @@ export type Database = {
           entered_by_admin_id: string | null
           game_year: number | null
           id: string
+          is_approved: boolean | null
           is_first_death_of_year: boolean | null
           is_last_death_of_year: boolean | null
           source_url: string | null
@@ -65,6 +68,8 @@ export type Database = {
         }
         Insert: {
           age_at_death: number
+          approved_at?: string | null
+          approved_by_admin_id?: string | null
           canonical_name: string
           cause_of_death_category?: string | null
           cause_of_death_details?: string | null
@@ -78,6 +83,7 @@ export type Database = {
           entered_by_admin_id?: string | null
           game_year?: number | null
           id?: string
+          is_approved?: boolean | null
           is_first_death_of_year?: boolean | null
           is_last_death_of_year?: boolean | null
           source_url?: string | null
@@ -85,6 +91,8 @@ export type Database = {
         }
         Update: {
           age_at_death?: number
+          approved_at?: string | null
+          approved_by_admin_id?: string | null
           canonical_name?: string
           cause_of_death_category?: string | null
           cause_of_death_details?: string | null
@@ -98,12 +106,21 @@ export type Database = {
           entered_by_admin_id?: string | null
           game_year?: number | null
           id?: string
+          is_approved?: boolean | null
           is_first_death_of_year?: boolean | null
           is_last_death_of_year?: boolean | null
           source_url?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "deceased_celebrities_approved_by_admin_id_fkey"
+            columns: ["approved_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fetch_logs: {
         Row: {

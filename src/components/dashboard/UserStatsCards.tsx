@@ -1,49 +1,60 @@
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Users, Skull } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent } from "@/components/ui/card";
+import { Users, Trophy, Skull } from "lucide-react";
 
 interface UserStatsCardsProps {
-  totalScore: number;
-  picksCount: number;
-  maxPicks: number;
-  hitCount: number;
+  totalUsers: number;
+  totalDeaths: number;
+  topScore: number;
 }
 
-export const UserStatsCards = ({ totalScore, picksCount, maxPicks, hitCount }: UserStatsCardsProps) => {
+export const UserStatsCards = ({ totalUsers, totalDeaths, topScore }: UserStatsCardsProps) => {
+  const navigate = useNavigate();
+
   return (
-    <div className="grid md:grid-cols-3 gap-6 mb-8">
-      <Card className="bg-black/40 border-purple-800/30">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-purple-400 text-sm">Total Score</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-2">
-            <Trophy className="h-5 w-5 text-purple-400" />
-            <span className="text-2xl font-bold text-white">{totalScore}</span>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <Card 
+        className="bg-black/40 border-purple-800/30 hover:bg-black/60 transition-colors cursor-pointer"
+        onClick={() => navigate('/players')}
+      >
+        <CardContent className="p-6">
+          <div className="flex items-center space-x-4">
+            <Users className="h-8 w-8 text-purple-400" />
+            <div>
+              <p className="text-sm font-medium text-gray-400">Total Players</p>
+              <p className="text-2xl font-bold text-white">{totalUsers}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
-      
-      <Card className="bg-black/40 border-purple-800/30">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-purple-400 text-sm">Picks Made</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-2">
-            <Users className="h-5 w-5 text-purple-400" />
-            <span className="text-2xl font-bold text-white">{picksCount}/{maxPicks}</span>
+
+      <Card 
+        className="bg-black/40 border-purple-800/30 hover:bg-black/60 transition-colors cursor-pointer"
+        onClick={() => navigate('/deaths')}
+      >
+        <CardContent className="p-6">
+          <div className="flex items-center space-x-4">
+            <Skull className="h-8 w-8 text-red-400" />
+            <div>
+              <p className="text-sm font-medium text-gray-400">Confirmed Deaths</p>
+              <p className="text-2xl font-bold text-white">{totalDeaths}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
-      
-      <Card className="bg-black/40 border-purple-800/30">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-purple-400 text-sm">Hits</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-2">
-            <Skull className="h-5 w-5 text-purple-400" />
-            <span className="text-2xl font-bold text-white">{hitCount}</span>
+
+      <Card 
+        className="bg-black/40 border-purple-800/30 hover:bg-black/60 transition-colors cursor-pointer"
+        onClick={() => navigate('/scoreboard')}
+      >
+        <CardContent className="p-6">
+          <div className="flex items-center space-x-4">
+            <Trophy className="h-8 w-8 text-yellow-400" />
+            <div>
+              <p className="text-sm font-medium text-gray-400">Top Score</p>
+              <p className="text-2xl font-bold text-white">{topScore}</p>
+            </div>
           </div>
         </CardContent>
       </Card>

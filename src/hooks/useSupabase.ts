@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseConfig } from '@/config/supabase';
@@ -32,6 +33,7 @@ export interface SupabaseDeceasedCelebrity {
   game_year: number;
   source_url?: string;
   created_at: string;
+  is_approved?: boolean;
 }
 
 export interface SupabaseCelebrityPick {
@@ -53,20 +55,25 @@ export interface SupabaseUser {
   created_at: string;
 }
 
-export const useDeceasedCelebrities = (gameYear: number = 2025) => {
+export const useDeceasedCelebrities = (gameYear: number = 2025, approvedOnly: boolean = true) => {
   return useQuery({
-    queryKey: ['deceased-celebrities', gameYear],
+    queryKey: ['deceased-celebrities', gameYear, approvedOnly],
     queryFn: async () => {
       if (!supabase) {
         console.log('Supabase not configured, returning mock data');
         return [];
       }
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('deceased_celebrities')
         .select('*')
-        .eq('game_year', gameYear)
-        .order('date_of_death', { ascending: false });
+        .eq('game_year', gameYear);
+      
+      if (approvedOnly) {
+        query = query.eq('is_approved', true);
+      }
+      
+      const { data, error } = await query.order('date_of_death', { ascending: false });
       
       if (error) throw error;
       return data as SupabaseDeceasedCelebrity[];

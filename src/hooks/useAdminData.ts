@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -26,13 +25,13 @@ export const useAdminData = () => {
 
   // Queries
   const { data: deceasedCelebrities = [] } = useQuery({
-    queryKey: ['deceased-celebrities'],
+    queryKey: ['deceased-celebrities-admin'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deceased_celebrities')
         .select('*')
         .eq('game_year', 2025)
-        .order('date_of_death', { ascending: false });
+        .order('created_at', { ascending: false }); // Show newest first for admin
       if (error) throw error;
       return data;
     }
@@ -100,7 +99,7 @@ export const useAdminData = () => {
         title: "Death fetch started",
         description: "Celebrity deaths are being fetched and processed.",
       });
-      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
+      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities-admin'] });
       queryClient.invalidateQueries({ queryKey: ['fetch-logs'] });
       queryClient.invalidateQueries({ queryKey: ['celebrity-picks'] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });

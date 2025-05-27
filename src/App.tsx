@@ -15,6 +15,9 @@ import Scoreboard from "./pages/Scoreboard";
 import Players from "./pages/Players";
 import DeceasedList from "./pages/DeceasedList";
 import AdminDashboard from "./pages/AdminDashboard";
+import AllPlayers from "./pages/AllPlayers";
+import PlayerDetails from "./pages/PlayerDetails";
+import AllDeaths from "./pages/AllDeaths";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,7 +36,9 @@ const App = () => {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/scoreboard" element={<Scoreboard />} />
-              <Route path="/players" element={<Players />} />
+              <Route path="/players" element={<AllPlayers />} />
+              <Route path="/player/:playerId" element={<PlayerDetails />} />
+              <Route path="/deaths" element={<AllDeaths />} />
               <Route path="/deceased" element={<DeceasedList />} />
               <Route path="/dashboard" element={
                 <ProtectedRoute>
