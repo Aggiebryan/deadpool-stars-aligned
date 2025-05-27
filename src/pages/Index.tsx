@@ -83,9 +83,6 @@ const Index = () => {
             <Link to="/rules">
               <Button variant="ghost" className="text-white hover:text-purple-300">Rules</Button>
             </Link>
-            <Link to="/scoreboard">
-              <Button variant="ghost" className="text-white hover:text-purple-300">Scoreboard</Button>
-            </Link>
             <Link to="/deceased">
               <Button variant="ghost" className="text-white hover:text-purple-300">Deaths</Button>
             </Link>
