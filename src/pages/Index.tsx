@@ -1,9 +1,11 @@
+
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skull, Trophy, Users, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const { user, profile } = useAuth();
@@ -13,6 +15,7 @@ const Index = () => {
     topScore: 0,
     daysRemaining: 0
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Calculate days remaining in 2025
@@ -22,7 +25,50 @@ const Index = () => {
     const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
     
     setGameStats(prev => ({ ...prev, daysRemaining: Math.max(0, daysRemaining) }));
+    
+    // Load real game statistics
+    loadGameStats();
   }, []);
+
+  const loadGameStats = async () => {
+    try {
+      // Get total players (excluding admins)
+      const { data: players, error: playersError } = await supabase
+        .from('profiles')
+        .select('total_score')
+        .eq('is_admin', false);
+
+      if (playersError) {
+        console.error('Error loading players:', playersError);
+      }
+
+      // Get total deaths
+      const { data: deaths, error: deathsError } = await supabase
+        .from('deceased_celebrities')
+        .select('id')
+        .eq('game_year', 2025);
+
+      if (deathsError) {
+        console.error('Error loading deaths:', deathsError);
+      }
+
+      // Calculate statistics
+      const totalPlayers = players?.length || 0;
+      const totalDeaths = deaths?.length || 0;
+      const topScore = players?.length > 0 ? Math.max(...players.map(p => p.total_score)) : 0;
+
+      setGameStats(prev => ({
+        ...prev,
+        totalPlayers,
+        totalDeaths,
+        topScore
+      }));
+    } catch (error) {
+      console.error('Error loading game stats:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -39,6 +85,9 @@ const Index = () => {
             </Link>
             <Link to="/scoreboard">
               <Button variant="ghost" className="text-white hover:text-purple-300">Scoreboard</Button>
+            </Link>
+            <Link to="/players">
+              <Button variant="ghost" className="text-white hover:text-purple-300">Players</Button>
             </Link>
             <Link to="/deceased">
               <Button variant="ghost" className="text-white hover:text-purple-300">Deaths</Button>
@@ -82,7 +131,9 @@ const Index = () => {
               <CardContent>
                 <div className="flex items-center space-x-2">
                   <Users className="h-5 w-5 text-purple-400" />
-                  <span className="text-2xl font-bold text-white">{gameStats.totalPlayers}</span>
+                  <span className="text-2xl font-bold text-white">
+                    {isLoading ? "..." : gameStats.totalPlayers}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -94,7 +145,9 @@ const Index = () => {
               <CardContent>
                 <div className="flex items-center space-x-2">
                   <Skull className="h-5 w-5 text-purple-400" />
-                  <span className="text-2xl font-bold text-white">{gameStats.totalDeaths}</span>
+                  <span className="text-2xl font-bold text-white">
+                    {isLoading ? "..." : gameStats.totalDeaths}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -106,7 +159,9 @@ const Index = () => {
               <CardContent>
                 <div className="flex items-center space-x-2">
                   <Trophy className="h-5 w-5 text-purple-400" />
-                  <span className="text-2xl font-bold text-white">{gameStats.topScore}</span>
+                  <span className="text-2xl font-bold text-white">
+                    {isLoading ? "..." : gameStats.topScore}
+                  </span>
                 </div>
               </CardContent>
             </Card>

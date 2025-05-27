@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Scoreboard from "./pages/Scoreboard";
+import Players from "./pages/Players";
 import DeceasedList from "./pages/DeceasedList";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
@@ -32,6 +33,7 @@ const App = () => {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/scoreboard" element={<Scoreboard />} />
+              <Route path="/players" element={<Players />} />
               <Route path="/deceased" element={<DeceasedList />} />
               <Route path="/dashboard" element={
                 <ProtectedRoute>

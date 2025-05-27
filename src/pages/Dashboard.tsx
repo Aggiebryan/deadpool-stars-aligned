@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Skull, Trophy, Users, Plus, Trash2, LogOut } from "lucide-react";
+import { Skull, Trophy, Users, Plus, Trash2, LogOut, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -169,6 +169,14 @@ const Dashboard = () => {
           </Link>
           <div className="flex items-center space-x-4">
             <span className="text-white">Welcome, {profile.username}</span>
+            {profile.is_admin && (
+              <Link to="/admin">
+                <Button variant="outline" className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Admin Panel
+                </Button>
+              </Link>
+            )}
             <Button onClick={handleLogout} variant="ghost" className="text-white hover:text-purple-300">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
@@ -304,6 +312,11 @@ const Dashboard = () => {
             <Link to="/scoreboard">
               <Button variant="outline" className="border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white">
                 View Scoreboard
+              </Button>
+            </Link>
+            <Link to="/players">
+              <Button variant="outline" className="border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white">
+                All Players
               </Button>
             </Link>
             <Link to="/deceased">
