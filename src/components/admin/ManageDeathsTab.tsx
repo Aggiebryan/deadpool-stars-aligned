@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,6 +38,7 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
   const [editingDeath, setEditingDeath] = useState<DeceasedCelebrity | null>(null);
   const [scrapeDate, setScrapeDate] = useState("");
   const [isScrapingDate, setIsScrapingDate] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const handleApprove = async (id: string) => {
@@ -57,6 +58,7 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
         description: "The death has been approved and scores have been calculated.",
       });
 
+      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities-admin'] });
       queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
       queryClient.invalidateQueries({ queryKey: ['celebrity-picks'] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
@@ -83,6 +85,7 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
         description: "The death record has been removed.",
       });
 
+      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities-admin'] });
       queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
     } catch (error: any) {
       toast({
@@ -121,6 +124,8 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
       });
 
       setEditingDeath(null);
+      setIsDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities-admin'] });
       queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
     } catch (error: any) {
       toast({
@@ -147,6 +152,7 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
         description: `Scraped deaths for ${scrapeDate}: Found ${data.totalDeaths} deaths, added ${data.deathsAdded} new records`,
       });
 
+      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities-admin'] });
       queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
     } catch (error: any) {
       toast({
@@ -209,6 +215,23 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
                 {deceased.cause_of_death_details && (
                   <p className="text-gray-400 text-sm mb-3">{deceased.cause_of_death_details}</p>
                 )}
+                
+                {/* Show bonus points if any are active */}
+                {(deceased.died_on_birthday || deceased.died_on_major_holiday || deceased.died_during_public_event || 
+                  deceased.died_in_extreme_sport || deceased.is_first_death_of_year || deceased.is_last_death_of_year) && (
+                  <div className="mb-3">
+                    <p className="text-xs text-yellow-400 mb-1">Active Bonuses:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {deceased.died_on_birthday && <Badge variant="outline" className="text-xs">Birthday +15pts</Badge>}
+                      {deceased.died_on_major_holiday && <Badge variant="outline" className="text-xs">Holiday +10pts</Badge>}
+                      {deceased.died_during_public_event && <Badge variant="outline" className="text-xs">Public Event +25pts</Badge>}
+                      {deceased.died_in_extreme_sport && <Badge variant="outline" className="text-xs">Extreme Sport +30pts</Badge>}
+                      {deceased.is_first_death_of_year && <Badge variant="outline" className="text-xs">First Death +10pts</Badge>}
+                      {deceased.is_last_death_of_year && <Badge variant="outline" className="text-xs">Last Death +10pts</Badge>}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   {!deceased.is_approved && (
                     <>
@@ -230,10 +253,13 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
                       </Button>
                     </>
                   )}
-                  <Dialog>
+                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
                       <Button
-                        onClick={() => setEditingDeath(deceased)}
+                        onClick={() => {
+                          setEditingDeath(deceased);
+                          setIsDialogOpen(true);
+                        }}
                         className="bg-blue-600 hover:bg-blue-700"
                         size="sm"
                       >
@@ -244,6 +270,9 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
                     <DialogContent className="bg-slate-900 border-purple-800/30 text-white max-w-2xl">
                       <DialogHeader>
                         <DialogTitle>Edit Death Record</DialogTitle>
+                        <DialogDescription>
+                          Edit the death record details and bonus point modifiers.
+                        </DialogDescription>
                       </DialogHeader>
                       {editingDeath && (
                         <div className="space-y-4">
@@ -295,54 +324,57 @@ export const ManageDeathsTab = ({ deceasedCelebrities }: ManageDeathsTabProps) =
                               className="bg-black/20 border-purple-800/30"
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="birthday"
-                                checked={editingDeath.died_on_birthday || false}
-                                onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, died_on_birthday: !!checked })}
-                              />
-                              <Label htmlFor="birthday">Died on Birthday (+15pts)</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="holiday"
-                                checked={editingDeath.died_on_major_holiday || false}
-                                onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, died_on_major_holiday: !!checked })}
-                              />
-                              <Label htmlFor="holiday">Died on Holiday (+10pts)</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="public"
-                                checked={editingDeath.died_during_public_event || false}
-                                onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, died_during_public_event: !!checked })}
-                              />
-                              <Label htmlFor="public">Died During Public Event (+25pts)</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="extreme"
-                                checked={editingDeath.died_in_extreme_sport || false}
-                                onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, died_in_extreme_sport: !!checked })}
-                              />
-                              <Label htmlFor="extreme">Died in Extreme Sport (+30pts)</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="first"
-                                checked={editingDeath.is_first_death_of_year || false}
-                                onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, is_first_death_of_year: !!checked })}
-                              />
-                              <Label htmlFor="first">First Death of Year (+10pts)</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="last"
-                                checked={editingDeath.is_last_death_of_year || false}
-                                onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, is_last_death_of_year: !!checked })}
-                              />
-                              <Label htmlFor="last">Last Death of Year (+10pts)</Label>
+                          <div>
+                            <Label className="text-base font-semibold">Bonus Point Modifiers</Label>
+                            <div className="grid grid-cols-2 gap-4 mt-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="birthday"
+                                  checked={editingDeath.died_on_birthday || false}
+                                  onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, died_on_birthday: !!checked })}
+                                />
+                                <Label htmlFor="birthday">Died on Birthday (+15pts)</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="holiday"
+                                  checked={editingDeath.died_on_major_holiday || false}
+                                  onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, died_on_major_holiday: !!checked })}
+                                />
+                                <Label htmlFor="holiday">Died on Holiday (+10pts)</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="public"
+                                  checked={editingDeath.died_during_public_event || false}
+                                  onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, died_during_public_event: !!checked })}
+                                />
+                                <Label htmlFor="public">Died During Public Event (+25pts)</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="extreme"
+                                  checked={editingDeath.died_in_extreme_sport || false}
+                                  onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, died_in_extreme_sport: !!checked })}
+                                />
+                                <Label htmlFor="extreme">Died in Extreme Sport (+30pts)</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="first"
+                                  checked={editingDeath.is_first_death_of_year || false}
+                                  onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, is_first_death_of_year: !!checked })}
+                                />
+                                <Label htmlFor="first">First Death of Year (+10pts)</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="last"
+                                  checked={editingDeath.is_last_death_of_year || false}
+                                  onCheckedChange={(checked) => setEditingDeath({ ...editingDeath, is_last_death_of_year: !!checked })}
+                                />
+                                <Label htmlFor="last">Last Death of Year (+10pts)</Label>
+                              </div>
                             </div>
                           </div>
                           <Button onClick={handleSaveEdit} className="bg-green-600 hover:bg-green-700 w-full">
