@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -112,25 +113,25 @@ const AdminDashboard = () => {
   const { data: rssFeeds = [] } = useQuery({
     queryKey: ['rss-feeds'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('rss_feeds')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data;
+      return data as RSSFeed[];
     }
   });
 
   const { data: fetchLogs = [] } = useQuery({
     queryKey: ['fetch-logs'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('fetch_logs')
         .select('*')
         .order('started_at', { ascending: false })
         .limit(10);
       if (error) throw error;
-      return data;
+      return data as FetchLog[];
     }
   });
 
@@ -162,7 +163,7 @@ const AdminDashboard = () => {
 
   const addFeedMutation = useMutation({
     mutationFn: async (feed: { name: string; url: string }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('rss_feeds')
         .insert(feed)
         .select()
@@ -186,7 +187,7 @@ const AdminDashboard = () => {
 
   const toggleFeedMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('rss_feeds')
         .update({ is_active })
         .eq('id', id);
@@ -214,6 +215,65 @@ const AdminDashboard = () => {
     e.preventDefault();
     if (newFeed.name && newFeed.url) {
       addFeedMutation.mutate(newFeed);
+    }
+  };
+
+  const handleAddDeath = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const birthDate = new Date(newDeath.dateOfBirth);
+      const deathDate = new Date(newDeath.dateOfDeath);
+      const ageAtDeath = deathDate.getFullYear() - birthDate.getFullYear();
+
+      const { error } = await supabase
+        .from('deceased_celebrities')
+        .insert({
+          canonical_name: newDeath.canonicalName,
+          date_of_birth: newDeath.dateOfBirth,
+          date_of_death: newDeath.dateOfDeath,
+          age_at_death: ageAtDeath,
+          cause_of_death_category: newDeath.causeOfDeathCategory,
+          cause_of_death_details: newDeath.causeOfDeathDetails || null,
+          died_during_public_event: newDeath.diedDuringPublicEvent,
+          died_in_extreme_sport: newDeath.diedInExtremeSport,
+          is_first_death_of_year: newDeath.isFirstDeathOfYear,
+          is_last_death_of_year: newDeath.isLastDeathOfYear,
+          game_year: 2025
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Death recorded successfully",
+        description: "Celebrity death has been added and scores updated.",
+      });
+
+      // Reset form
+      setNewDeath({
+        canonicalName: '',
+        dateOfBirth: '',
+        dateOfDeath: '',
+        causeOfDeathCategory: 'Natural',
+        causeOfDeathDetails: '',
+        diedDuringPublicEvent: false,
+        diedInExtremeSport: false,
+        isFirstDeathOfYear: false,
+        isLastDeathOfYear: false
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
+      queryClient.invalidateQueries({ queryKey: ['celebrity-picks'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    } catch (error: any) {
+      toast({
+        title: "Error recording death",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
