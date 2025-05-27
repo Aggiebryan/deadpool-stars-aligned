@@ -1,7 +1,7 @@
 
 export const supabaseConfig = {
-  url: import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL',
-  anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY'
+  url: import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co',
+  anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key'
 };
 
 // Note: You'll need to set these environment variables in your Lovable project settings:

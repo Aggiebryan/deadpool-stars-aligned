@@ -2,7 +2,18 @@ import { createClient } from '@supabase/supabase-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabaseConfig } from '@/config/supabase';
 
-export const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+// Only create the client if we have valid configuration
+let supabase: any = null;
+
+try {
+  if (supabaseConfig.url !== 'https://placeholder.supabase.co' && supabaseConfig.anonKey !== 'placeholder-anon-key') {
+    supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+  }
+} catch (error) {
+  console.error('Failed to initialize Supabase client:', error);
+}
+
+export { supabase };
 
 export interface SupabaseDeceasedCelebrity {
   id: string;
@@ -46,6 +57,11 @@ export const useDeceasedCelebrities = (gameYear: number = 2025) => {
   return useQuery({
     queryKey: ['deceased-celebrities', gameYear],
     queryFn: async () => {
+      if (!supabase) {
+        console.log('Supabase not configured, returning mock data');
+        return [];
+      }
+      
       const { data, error } = await supabase
         .from('deceased_celebrities')
         .select('*')
@@ -62,7 +78,7 @@ export const useCelebrityPicks = (userId?: string, gameYear: number = 2025) => {
   return useQuery({
     queryKey: ['celebrity-picks', userId, gameYear],
     queryFn: async () => {
-      if (!userId) return [];
+      if (!userId || !supabase) return [];
       
       const { data, error } = await supabase
         .from('celebrity_picks')
@@ -81,6 +97,11 @@ export const useUsers = () => {
   return useQuery({
     queryKey: ['users'],
     queryFn: async () => {
+      if (!supabase) {
+        console.log('Supabase not configured, returning empty users');
+        return [];
+      }
+      
       const { data, error } = await supabase
         .from('users')
         .select('id, username, email, is_admin, total_score, created_at')
@@ -97,6 +118,10 @@ export const useFetchCelebrityDeaths = () => {
   
   return useMutation({
     mutationFn: async () => {
+      if (!supabase) {
+        throw new Error('Supabase not configured');
+      }
+      
       const { data, error } = await supabase.functions.invoke('fetch-celebrity-deaths');
       if (error) throw error;
       return data;
@@ -112,6 +137,10 @@ export const useCreateDeceasedCelebrity = () => {
   
   return useMutation({
     mutationFn: async (celebrity: Omit<SupabaseDeceasedCelebrity, 'id' | 'created_at'>) => {
+      if (!supabase) {
+        throw new Error('Supabase not configured');
+      }
+      
       const { data, error } = await supabase
         .from('deceased_celebrities')
         .insert(celebrity)
