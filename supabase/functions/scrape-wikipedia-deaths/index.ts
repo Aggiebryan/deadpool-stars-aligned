@@ -44,98 +44,103 @@ async function scrapeWikipediaDeaths(year: number, month: string): Promise<Celeb
       return [];
     }
     
-    // Find all list items in the content
-    const listItems = contentDiv.querySelectorAll('li');
-    console.log(`Found ${listItems.length} list items to process`);
-    
     let currentDay = 1;
     
-    for (let i = 0; i < listItems.length; i++) {
-      const li = listItems[i];
-      const text = li.textContent || '';
-      
-      // Check if this li is immediately after a day heading
-      const prevElement = li.parentElement?.previousElementSibling;
-      if (prevElement?.tagName === 'H3') {
-        const dayMatch = prevElement.textContent?.match(/(\d{1,2})/);
-        if (dayMatch) {
-          currentDay = parseInt(dayMatch[1]);
+    // Find day headings and process list items under them
+    const headings = contentDiv.querySelectorAll('h3');
+    
+    for (const heading of headings) {
+      const dayMatch = heading.textContent?.match(/(\d{1,2})/);
+      if (dayMatch) {
+        currentDay = parseInt(dayMatch[1]);
+        
+        // Find the next sibling elements until we hit another h3
+        let nextElement = heading.nextElementSibling;
+        while (nextElement && nextElement.tagName !== 'H3') {
+          if (nextElement.tagName === 'UL') {
+            const listItems = nextElement.querySelectorAll('li');
+            
+            for (const li of listItems) {
+              const nameLink = li.querySelector('a[href^="/wiki/"]:not([href*="Deaths_in"])');
+              if (!nameLink) continue;
+              
+              const name = nameLink.textContent?.trim();
+              if (!name || name.length < 2) continue;
+              
+              const text = li.textContent || '';
+              
+              // Extract age - look for pattern like ", 75,"
+              const ageMatch = text.match(/,\s*(\d{1,3}),/);
+              const age = ageMatch ? parseInt(ageMatch[1]) : undefined;
+              
+              // Skip if no valid age or age is unrealistic
+              if (!age || age < 10 || age > 120) continue;
+              
+              // Extract description
+              let description = text;
+              if (ageMatch) {
+                const afterAge = text.split(ageMatch[0])[1];
+                description = afterAge ? afterAge.trim() : text;
+              }
+              
+              // Basic cause of death mapping
+              let cause = 'Natural';
+              const descLower = description.toLowerCase();
+              
+              if (descLower.includes('cancer') || descLower.includes('heart') || descLower.includes('stroke')) {
+                cause = 'Natural';
+              } else if (descLower.includes('accident') || descLower.includes('crash')) {
+                cause = 'Accidental';
+              } else if (descLower.includes('suicide')) {
+                cause = 'Suicide';
+              } else if (descLower.includes('murder') || descLower.includes('shot') || descLower.includes('killed')) {
+                cause = 'Violent';
+              } else if (descLower.includes('overdose') || descLower.includes('drug')) {
+                cause = 'RareOrUnusual';
+              }
+              
+              // Check if notable - look for occupation keywords
+              const notableKeywords = [
+                'actor', 'actress', 'musician', 'singer', 'politician', 'author', 'artist', 
+                'athlete', 'director', 'producer', 'writer', 'composer', 'dancer', 'comedian',
+                'journalist', 'broadcaster', 'chef', 'designer', 'model', 'activist', 'judge',
+                'governor', 'senator', 'representative', 'mayor', 'scientist', 'professor'
+              ];
+              
+              const isNotable = notableKeywords.some(keyword => descLower.includes(keyword));
+              
+              if (isNotable) {
+                const monthNum = {
+                  'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                  'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                  'September': '09', 'October': '10', 'November': '11', 'December': '12'
+                }[month] || '01';
+                
+                const dateOfDeath = `${year}-${monthNum}-${currentDay.toString().padStart(2, '0')}`;
+                
+                deaths.push({
+                  name,
+                  dateOfDeath,
+                  age,
+                  cause,
+                  description: description.substring(0, 500),
+                  sourceUrl: url
+                });
+                
+                console.log(`Added death: ${name}, ${age}, ${dateOfDeath}`);
+              }
+            }
+          }
+          nextElement = nextElement.nextElementSibling;
         }
-      }
-      
-      // Look for name links (first link is usually the person)
-      const nameLink = li.querySelector('a[href^="/wiki/"]:not([href*="Deaths_in"])');
-      if (!nameLink) continue;
-      
-      const name = nameLink.textContent?.trim();
-      if (!name || name.length < 2) continue;
-      
-      console.log(`Processing: ${name} from day ${currentDay}`);
-      
-      // Try to extract age from the text
-      const ageMatch = text.match(/,\s*(\d{1,3}),/);
-      const age = ageMatch ? parseInt(ageMatch[1]) : undefined;
-      
-      // Extract description (everything after name and age)
-      let description = text;
-      if (ageMatch) {
-        const afterAge = text.split(ageMatch[0])[1];
-        description = afterAge ? afterAge.trim() : text;
-      }
-      
-      // Basic cause of death extraction
-      let cause = 'Unknown';
-      const descLower = description.toLowerCase();
-      
-      if (descLower.includes('cancer')) cause = 'Natural';
-      else if (descLower.includes('heart attack') || descLower.includes('cardiac')) cause = 'Natural';
-      else if (descLower.includes('stroke')) cause = 'Natural';
-      else if (descLower.includes('covid') || descLower.includes('pneumonia')) cause = 'Natural';
-      else if (descLower.includes('accident') || descLower.includes('crash')) cause = 'Accidental';
-      else if (descLower.includes('suicide')) cause = 'Suicide';
-      else if (descLower.includes('murder') || descLower.includes('shot') || descLower.includes('killed')) cause = 'Violent';
-      else if (descLower.includes('overdose') || descLower.includes('drug')) cause = 'RareOrUnusual';
-      
-      // Check if this person seems notable (has occupation keywords)
-      const notableKeywords = [
-        'actor', 'actress', 'musician', 'singer', 'politician', 'author', 'artist', 
-        'athlete', 'director', 'producer', 'writer', 'composer', 'dancer', 'comedian',
-        'journalist', 'broadcaster', 'chef', 'designer', 'model', 'activist'
-      ];
-      
-      const isNotable = notableKeywords.some(keyword => descLower.includes(keyword));
-      
-      if (isNotable && age && age > 0 && age < 120) {
-        const dateOfDeath = `${year}-${month === 'January' ? '01' : 
-                                     month === 'February' ? '02' :
-                                     month === 'March' ? '03' :
-                                     month === 'April' ? '04' :
-                                     month === 'May' ? '05' :
-                                     month === 'June' ? '06' :
-                                     month === 'July' ? '07' :
-                                     month === 'August' ? '08' :
-                                     month === 'September' ? '09' :
-                                     month === 'October' ? '10' :
-                                     month === 'November' ? '11' : '12'}-${currentDay.toString().padStart(2, '0')}`;
-        
-        deaths.push({
-          name,
-          dateOfDeath,
-          age,
-          cause,
-          description: description.substring(0, 500), // Limit description length
-          sourceUrl: url
-        });
-        
-        console.log(`Added death: ${name}, ${age}, ${dateOfDeath}`);
       }
     }
     
-    console.log(`Extracted ${deaths.length} notable deaths from Wikipedia`);
+    console.log(`Extracted ${deaths.length} notable deaths from ${month} ${year}`);
     return deaths;
     
   } catch (error) {
-    console.error('Error scraping Wikipedia:', error);
+    console.error(`Error scraping ${month} ${year}:`, error);
     return [];
   }
 }
@@ -145,54 +150,92 @@ async function processDeaths(supabase: any, deaths: CelebrityDeath[], logId: str
   let picksScored = 0;
 
   for (const death of deaths) {
-    // Check if already exists
-    const { data: existing } = await supabase
-      .from('deceased_celebrities')
-      .select('id')
-      .eq('canonical_name', death.name)
-      .eq('date_of_death', death.dateOfDeath)
-      .single();
-    
-    if (!existing) {
-      const dateOfDeath = new Date(death.dateOfDeath);
-      const gameYear = dateOfDeath.getFullYear();
-      
-      // Map cause to category
-      let causeCategory = death.cause || 'Unknown';
-      
-      // Insert new death record
-      const { data: newDeath, error } = await supabase
+    try {
+      // Check if already exists
+      const { data: existing } = await supabase
         .from('deceased_celebrities')
-        .insert({
-          canonical_name: death.name,
-          date_of_death: death.dateOfDeath,
-          age_at_death: death.age,
-          cause_of_death_category: causeCategory,
-          cause_of_death_details: death.description,
-          game_year: gameYear,
-          source_url: death.sourceUrl,
-          died_on_birthday: false,
-          died_on_major_holiday: false,
-          died_during_public_event: false,
-          died_in_extreme_sport: false,
-          is_first_death_of_year: false,
-          is_last_death_of_year: false
-        })
-        .select()
+        .select('id')
+        .eq('canonical_name', death.name)
+        .eq('date_of_death', death.dateOfDeath)
         .single();
       
-      if (error) {
-        console.error('Error inserting death:', error);
-      } else {
-        console.log(`Inserted death record for ${death.name}`);
-        deathsAdded++;
+      if (!existing) {
+        const dateOfDeath = new Date(death.dateOfDeath);
+        const gameYear = dateOfDeath.getFullYear();
         
-        const scored = await updateMatchingPicks(supabase, death.name, gameYear, newDeath);
-        picksScored += scored;
+        // Insert new death record
+        const { data: newDeath, error } = await supabase
+          .from('deceased_celebrities')
+          .insert({
+            canonical_name: death.name,
+            date_of_death: death.dateOfDeath,
+            age_at_death: death.age,
+            cause_of_death_category: death.cause,
+            cause_of_death_details: death.description,
+            game_year: gameYear,
+            source_url: death.sourceUrl,
+            died_on_birthday: false,
+            died_on_major_holiday: false,
+            died_during_public_event: false,
+            died_in_extreme_sport: false,
+            is_first_death_of_year: false,
+            is_last_death_of_year: false
+          })
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('Error inserting death:', error);
+        } else {
+          console.log(`Inserted death record for ${death.name}`);
+          deathsAdded++;
+          
+          // Update matching picks
+          const { data: picks } = await supabase
+            .from('celebrity_picks')
+            .select('*')
+            .ilike('celebrity_name', death.name)
+            .eq('game_year', gameYear)
+            .eq('is_hit', false);
+          
+          if (picks && picks.length > 0) {
+            const points = calculatePoints(newDeath);
+            
+            for (const pick of picks) {
+              await supabase
+                .from('celebrity_picks')
+                .update({
+                  is_hit: true,
+                  points_awarded: points
+                })
+                .eq('id', pick.id);
+              
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('total_score')
+                .eq('id', pick.user_id)
+                .single();
+              
+              if (profile) {
+                await supabase
+                  .from('profiles')
+                  .update({
+                    total_score: profile.total_score + points
+                  })
+                  .eq('id', pick.user_id);
+              }
+            }
+            
+            picksScored += picks.length;
+          }
+        }
       }
+    } catch (error) {
+      console.error(`Error processing death ${death.name}:`, error);
     }
   }
 
+  // Update log with progress
   await supabase
     .from('fetch_logs')
     .update({
@@ -202,48 +245,6 @@ async function processDeaths(supabase: any, deaths: CelebrityDeath[], logId: str
     .eq('id', logId);
 
   return { deathsAdded, picksScored };
-}
-
-async function updateMatchingPicks(supabase: any, celebrityName: string, gameYear: number, deceased: any): Promise<number> {
-  const { data: picks } = await supabase
-    .from('celebrity_picks')
-    .select('*')
-    .ilike('celebrity_name', celebrityName)
-    .eq('game_year', gameYear)
-    .eq('is_hit', false);
-  
-  if (picks && picks.length > 0) {
-    const points = calculatePoints(deceased);
-    
-    for (const pick of picks) {
-      await supabase
-        .from('celebrity_picks')
-        .update({
-          is_hit: true,
-          points_awarded: points
-        })
-        .eq('id', pick.id);
-      
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('total_score')
-        .eq('id', pick.user_id)
-        .single();
-      
-      if (profile) {
-        await supabase
-          .from('profiles')
-          .update({
-            total_score: profile.total_score + points
-          })
-          .eq('id', pick.user_id);
-      }
-    }
-    
-    return picks.length;
-  }
-  
-  return 0;
 }
 
 function calculatePoints(deceased: any): number {
@@ -274,13 +275,6 @@ function calculatePoints(deceased: any): number {
       break;
   }
   
-  if (deceased.died_on_birthday) points += 15;
-  if (deceased.died_on_major_holiday) points += 10;
-  if (deceased.died_during_public_event) points += 25;
-  if (deceased.died_in_extreme_sport) points += 30;
-  if (deceased.is_first_death_of_year) points += 10;
-  if (deceased.is_last_death_of_year) points += 10;
-  
   return Math.max(points, 0);
 }
 
@@ -307,44 +301,53 @@ serve(async (req) => {
       .select()
       .single();
 
-    console.log('Starting Wikipedia death scrape process...');
+    console.log('Starting optimized Wikipedia death scrape...');
     
-    // Get current year and recent months
     const currentYear = new Date().getFullYear();
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                   'July', 'August', 'September', 'October', 'November', 'December'];
+    const currentMonth = new Date().getMonth();
+    
+    // Only scrape the current year and last 3 months to avoid timeouts
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December'];
     
     let allDeaths: CelebrityDeath[] = [];
     
-    // Scrape current year and previous year
-    for (const year of [currentYear - 1, currentYear]) {
-      for (const month of months) {
-        const deaths = await scrapeWikipediaDeaths(year, month);
-        allDeaths = allDeaths.concat(deaths);
-        
-        // Small delay to be polite to Wikipedia
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+    // Scrape current year months up to current month + last year's last few months
+    const monthsToScrape = [];
+    
+    // Add current year months (up to current month)
+    for (let i = 0; i <= currentMonth; i++) {
+      monthsToScrape.push({ year: currentYear, month: monthNames[i] });
     }
     
-    // Filter for recent deaths (2024+)
-    const recentDeaths = allDeaths.filter(death => {
-      const deathYear = new Date(death.dateOfDeath).getFullYear();
-      return deathYear >= 2024;
-    });
+    // Add last few months of previous year
+    for (let i = Math.max(0, 12 - 3); i < 12; i++) {
+      monthsToScrape.push({ year: currentYear - 1, month: monthNames[i] });
+    }
     
-    console.log(`Found ${recentDeaths.length} recent deaths from Wikipedia`);
+    console.log(`Scraping ${monthsToScrape.length} months`);
+    
+    for (const { year, month } of monthsToScrape) {
+      console.log(`Scraping ${month} ${year}...`);
+      const deaths = await scrapeWikipediaDeaths(year, month);
+      allDeaths = allDeaths.concat(deaths);
+      
+      // Small delay to be polite
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    console.log(`Found ${allDeaths.length} total deaths from Wikipedia`);
     
     // Update log with deaths found
     await supabaseClient
       .from('fetch_logs')
       .update({
-        deaths_found: recentDeaths.length
+        deaths_found: allDeaths.length
       })
       .eq('id', logEntry.id);
     
     // Process and store deaths
-    const { deathsAdded, picksScored } = await processDeaths(supabaseClient, recentDeaths, logEntry.id);
+    const { deathsAdded, picksScored } = await processDeaths(supabaseClient, allDeaths, logEntry.id);
     
     // Complete the log
     await supabaseClient
@@ -358,11 +361,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        totalDeaths: recentDeaths.length,
+        totalDeaths: allDeaths.length,
         deathsAdded,
         picksScored,
         source: 'Wikipedia',
-        message: 'Celebrity deaths scraped successfully from Wikipedia' 
+        message: `Celebrity deaths scraped successfully from ${monthsToScrape.length} months` 
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -393,7 +396,7 @@ serve(async (req) => {
       JSON.stringify({ error: error.message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
+        status: 500,
       },
     )
   }
