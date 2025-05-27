@@ -22,7 +22,7 @@ interface RSSFeed {
   is_active: boolean;
 }
 
-async function fetchFromRSSFeed(feed: RSSFeed): Promise<CelebrityDeath[]> {
+async function fetchFromRSSFeed(feed: RSSFeed, sinceDate: string): Promise<CelebrityDeath[]> {
   try {
     console.log(`Fetching from ${feed.name}: ${feed.url}`);
     const response = await fetch(feed.url);
@@ -31,24 +31,30 @@ async function fetchFromRSSFeed(feed: RSSFeed): Promise<CelebrityDeath[]> {
     // Parse RSS XML - simplified parsing for demonstration
     const items = xmlText.match(/<item>[\s\S]*?<\/item>/g) || [];
     const deaths: CelebrityDeath[] = [];
+    const cutoffDate = new Date(sinceDate);
     
-    for (const item of items.slice(0, 10)) { // Limit to recent items
+    for (const item of items) {
       const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/);
       const linkMatch = item.match(/<link>(.*?)<\/link>/);
       const pubDateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/);
       
       if (titleMatch && linkMatch && pubDateMatch) {
         const title = titleMatch[1];
-        const nameMatch = title.match(/^(.*?),/) || title.match(/^(.*?) dies/) || title.match(/^(.*?) dead/);
-        const ageMatch = title.match(/age (\d+)/i) || title.match(/(\d+),/);
+        const pubDate = new Date(pubDateMatch[1]);
         
-        if (nameMatch) {
-          deaths.push({
-            name: nameMatch[1].trim(),
-            dateOfDeath: new Date(pubDateMatch[1]).toISOString().split('T')[0],
-            age: ageMatch ? parseInt(ageMatch[1]) : undefined,
-            sourceUrl: linkMatch[1]
-          });
+        // Only process items published since the cutoff date
+        if (pubDate >= cutoffDate) {
+          const nameMatch = title.match(/^(.*?),/) || title.match(/^(.*?) dies/) || title.match(/^(.*?) dead/);
+          const ageMatch = title.match(/age (\d+)/i) || title.match(/(\d+),/);
+          
+          if (nameMatch) {
+            deaths.push({
+              name: nameMatch[1].trim(),
+              dateOfDeath: new Date(pubDateMatch[1]).toISOString().split('T')[0],
+              age: ageMatch ? parseInt(ageMatch[1]) : undefined,
+              sourceUrl: linkMatch[1]
+            });
+          }
         }
       }
     }
@@ -258,11 +264,15 @@ serve(async (req) => {
       throw new Error('No active RSS feeds found');
     }
 
+    // Set cutoff date to January 1, 2025 for comprehensive scanning
+    const cutoffDate = '2025-01-01T00:00:00Z';
+    console.log(`Fetching celebrity deaths since ${cutoffDate}`);
+
     let allDeaths: CelebrityDeath[] = [];
     
-    // Fetch from all active RSS feeds
+    // Fetch from all active RSS feeds since January 1, 2025
     for (const feed of rssFeeds) {
-      const deaths = await fetchFromRSSFeed(feed);
+      const deaths = await fetchFromRSSFeed(feed, cutoffDate);
       allDeaths = allDeaths.concat(deaths);
     }
 
@@ -271,7 +281,7 @@ serve(async (req) => {
       index === self.findIndex(d => d.name === death.name && d.dateOfDeath === death.dateOfDeath)
     );
 
-    console.log(`Found ${uniqueDeaths.length} unique deaths from ${rssFeeds.length} RSS feeds`);
+    console.log(`Found ${uniqueDeaths.length} unique deaths from ${rssFeeds.length} RSS feeds since ${cutoffDate}`);
     
     // Update log with deaths found
     await supabaseClient
@@ -300,7 +310,8 @@ serve(async (req) => {
         deathsAdded,
         picksScored,
         feedsProcessed: rssFeeds.length,
-        message: 'Celebrity deaths updated successfully' 
+        cutoffDate,
+        message: 'Celebrity deaths updated successfully from January 1, 2025' 
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

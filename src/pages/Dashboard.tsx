@@ -55,11 +55,11 @@ const Dashboard = () => {
 
     setIsLoading(true);
 
-    // Check if user already has 10 picks
+    // Check if user already has 10 picks (enforced on frontend too)
     if (userPicks.length >= 10) {
       toast({
         title: "Pick limit reached",
-        description: "You can only have 10 celebrities in your list",
+        description: "You can only have 10 celebrities in your DeadPool list",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -95,25 +95,36 @@ const Dashboard = () => {
       return;
     }
 
-    // Add new pick
+    // Add new pick with timestamp set to December 31, 2024
     const { error } = await supabase
       .from('celebrity_picks')
       .insert({
         user_id: user.id,
         celebrity_name: newCelebrityName.trim(),
-        game_year: 2025
+        game_year: 2025,
+        created_at: '2024-12-31T23:59:59+00:00',
+        updated_at: '2024-12-31T23:59:59+00:00'
       });
 
     if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add celebrity pick",
-        variant: "destructive",
-      });
+      console.error('Error adding pick:', error);
+      if (error.message.includes('Cannot have more than 10 picks')) {
+        toast({
+          title: "Pick limit reached",
+          description: "You can only have 10 celebrities in your DeadPool list",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to add celebrity pick",
+          variant: "destructive",
+        });
+      }
     } else {
       toast({
         title: "Celebrity added",
-        description: `${newCelebrityName} has been added to your list`,
+        description: `${newCelebrityName} has been added to your DeadPool list`,
       });
       setNewCelebrityName("");
       loadUserPicks();
@@ -137,7 +148,7 @@ const Dashboard = () => {
     } else {
       toast({
         title: "Celebrity removed",
-        description: "Celebrity has been removed from your list",
+        description: "Celebrity has been removed from your DeadPool list",
       });
       loadUserPicks();
     }
@@ -157,6 +168,7 @@ const Dashboard = () => {
   }
 
   const hitPicks = userPicks.filter(pick => pick.is_hit);
+  const maxPicks = 10;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -208,7 +220,7 @@ const Dashboard = () => {
               <CardContent>
                 <div className="flex items-center space-x-2">
                   <Users className="h-5 w-5 text-purple-400" />
-                  <span className="text-2xl font-bold text-white">{userPicks.length}/10</span>
+                  <span className="text-2xl font-bold text-white">{userPicks.length}/{maxPicks}</span>
                 </div>
               </CardContent>
             </Card>
@@ -232,7 +244,7 @@ const Dashboard = () => {
               <CardHeader>
                 <CardTitle className="text-white">Add Celebrity Pick</CardTitle>
                 <CardDescription className="text-gray-400">
-                  You can pick up to 10 celebrities for 2025
+                  You can pick up to {maxPicks} celebrities for 2025 ({userPicks.length}/{maxPicks} used)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -246,13 +258,18 @@ const Dashboard = () => {
                       onChange={(e) => setNewCelebrityName(e.target.value)}
                       placeholder="Enter celebrity name..."
                       className="bg-black/20 border-purple-800/30 text-white"
-                      disabled={userPicks.length >= 10}
+                      disabled={userPicks.length >= maxPicks}
                     />
                   </div>
+                  {userPicks.length >= maxPicks && (
+                    <p className="text-red-400 text-sm">
+                      You have reached the maximum of {maxPicks} celebrity picks.
+                    </p>
+                  )}
                   <Button 
                     type="submit" 
                     className="bg-purple-600 hover:bg-purple-700"
-                    disabled={isLoading || userPicks.length >= 10 || !newCelebrityName.trim()}
+                    disabled={isLoading || userPicks.length >= maxPicks || !newCelebrityName.trim()}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     {isLoading ? "Adding..." : "Add Pick"}
@@ -264,9 +281,9 @@ const Dashboard = () => {
             {/* Current Picks */}
             <Card className="bg-black/40 border-purple-800/30">
               <CardHeader>
-                <CardTitle className="text-white">Your Celebrity Picks</CardTitle>
+                <CardTitle className="text-white">Your DeadPool Picks</CardTitle>
                 <CardDescription className="text-gray-400">
-                  {userPicks.length}/10 celebrities selected
+                  {userPicks.length}/{maxPicks} celebrities selected
                 </CardDescription>
               </CardHeader>
               <CardContent>

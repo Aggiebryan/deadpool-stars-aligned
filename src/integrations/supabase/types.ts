@@ -105,6 +105,42 @@ export type Database = {
         }
         Relationships: []
       }
+      fetch_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          deaths_added: number | null
+          deaths_found: number | null
+          error_message: string | null
+          id: string
+          picks_scored: number | null
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          deaths_added?: number | null
+          deaths_found?: number | null
+          error_message?: string | null
+          id?: string
+          picks_scored?: number | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          deaths_added?: number | null
+          deaths_found?: number | null
+          error_message?: string | null
+          id?: string
+          picks_scored?: number | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -132,6 +168,33 @@ export type Database = {
           total_score?: number | null
           updated_at?: string | null
           username?: string
+        }
+        Relationships: []
+      }
+      rss_feeds: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+          url?: string
         }
         Relationships: []
       }
