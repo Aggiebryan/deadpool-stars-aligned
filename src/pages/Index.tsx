@@ -1,13 +1,12 @@
-
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skull, Trophy, Users, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user, profile } = useAuth();
   const [gameStats, setGameStats] = useState({
     totalPlayers: 0,
     totalDeaths: 0,
@@ -23,12 +22,6 @@ const Index = () => {
     const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
     
     setGameStats(prev => ({ ...prev, daysRemaining: Math.max(0, daysRemaining) }));
-    
-    // Load user from localStorage if exists
-    const userData = localStorage.getItem('currentUser');
-    if (userData) {
-      setCurrentUser(JSON.parse(userData));
-    }
   }, []);
 
   return (
@@ -50,8 +43,8 @@ const Index = () => {
             <Link to="/deceased">
               <Button variant="ghost" className="text-white hover:text-purple-300">Deaths</Button>
             </Link>
-            {currentUser ? (
-              <Link to="/dashboard">
+            {user ? (
+              <Link to={profile?.is_admin ? "/admin" : "/dashboard"}>
                 <Button className="bg-purple-600 hover:bg-purple-700">Dashboard</Button>
               </Link>
             ) : (
@@ -131,7 +124,7 @@ const Index = () => {
             </Card>
           </div>
 
-          {!currentUser && (
+          {!user && (
             <div className="space-x-4">
               <Link to="/register">
                 <Button size="lg" className="bg-purple-600 hover:bg-purple-700 text-lg px-8 py-3">

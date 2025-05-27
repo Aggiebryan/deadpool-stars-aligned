@@ -9,7 +9,132 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      celebrity_picks: {
+        Row: {
+          celebrity_name: string
+          created_at: string | null
+          game_year: number | null
+          id: string
+          is_hit: boolean | null
+          points_awarded: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          celebrity_name: string
+          created_at?: string | null
+          game_year?: number | null
+          id?: string
+          is_hit?: boolean | null
+          points_awarded?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          celebrity_name?: string
+          created_at?: string | null
+          game_year?: number | null
+          id?: string
+          is_hit?: boolean | null
+          points_awarded?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      deceased_celebrities: {
+        Row: {
+          age_at_death: number
+          canonical_name: string
+          cause_of_death_category: string | null
+          cause_of_death_details: string | null
+          created_at: string | null
+          date_of_birth: string | null
+          date_of_death: string
+          died_during_public_event: boolean | null
+          died_in_extreme_sport: boolean | null
+          died_on_birthday: boolean | null
+          died_on_major_holiday: boolean | null
+          entered_by_admin_id: string | null
+          game_year: number | null
+          id: string
+          is_first_death_of_year: boolean | null
+          is_last_death_of_year: boolean | null
+          source_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          age_at_death: number
+          canonical_name: string
+          cause_of_death_category?: string | null
+          cause_of_death_details?: string | null
+          created_at?: string | null
+          date_of_birth?: string | null
+          date_of_death: string
+          died_during_public_event?: boolean | null
+          died_in_extreme_sport?: boolean | null
+          died_on_birthday?: boolean | null
+          died_on_major_holiday?: boolean | null
+          entered_by_admin_id?: string | null
+          game_year?: number | null
+          id?: string
+          is_first_death_of_year?: boolean | null
+          is_last_death_of_year?: boolean | null
+          source_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          age_at_death?: number
+          canonical_name?: string
+          cause_of_death_category?: string | null
+          cause_of_death_details?: string | null
+          created_at?: string | null
+          date_of_birth?: string | null
+          date_of_death?: string
+          died_during_public_event?: boolean | null
+          died_in_extreme_sport?: boolean | null
+          died_on_birthday?: boolean | null
+          died_on_major_holiday?: boolean | null
+          entered_by_admin_id?: string | null
+          game_year?: number | null
+          id?: string
+          is_first_death_of_year?: boolean | null
+          is_last_death_of_year?: boolean | null
+          source_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          is_admin: boolean | null
+          total_score: number | null
+          updated_at: string | null
+          username: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id: string
+          is_admin?: boolean | null
+          total_score?: number | null
+          updated_at?: string | null
+          username: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          is_admin?: boolean | null
+          total_score?: number | null
+          updated_at?: string | null
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

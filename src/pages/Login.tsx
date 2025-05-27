@@ -6,40 +6,42 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skull, ArrowLeft } from "lucide-react";
-import { getUsers, setCurrentUser } from "@/utils/localStorage";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 const Login = () => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { signIn, user, profile } = useAuth();
+
+  // Redirect if already logged in
+  if (user) {
+    navigate(profile?.is_admin ? "/admin" : "/dashboard");
+    return null;
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simple authentication check (in real app, this would be server-side)
-    const users = getUsers();
-    const user = users.find(u => u.username === username);
-
-    if (user) {
-      // In a real app, you'd verify the password hash
-      setCurrentUser(user);
+    try {
+      await signIn(email, password);
       toast({
         title: "Welcome back!",
-        description: `Logged in as ${user.username}`,
+        description: "Successfully logged in",
       });
-      navigate(user.isAdmin ? "/admin" : "/dashboard");
-    } else {
+      navigate("/dashboard");
+    } catch (error: any) {
       toast({
         title: "Login failed",
-        description: "Invalid username or password",
+        description: error.message || "Invalid email or password",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
@@ -67,12 +69,12 @@ const Login = () => {
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-white">Username</Label>
+                <Label htmlFor="email" className="text-white">Email</Label>
                 <Input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="bg-black/20 border-purple-800/30 text-white"
                   required
                 />
@@ -104,12 +106,6 @@ const Login = () => {
                   Register here
                 </Link>
               </p>
-            </div>
-
-            <div className="mt-4 p-4 bg-purple-900/20 rounded-lg">
-              <p className="text-sm text-gray-300 mb-2">Demo Accounts:</p>
-              <p className="text-xs text-gray-400">Admin: username "admin", any password</p>
-              <p className="text-xs text-gray-400">Or register as a new player</p>
             </div>
           </CardContent>
         </Card>

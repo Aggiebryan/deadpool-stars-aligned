@@ -6,9 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skull, ArrowLeft } from "lucide-react";
-import { getUsers, saveUsers, setCurrentUser, generateId } from "@/utils/localStorage";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { User } from "@/types";
 
 const Register = () => {
   const [username, setUsername] = useState("");
@@ -17,6 +16,13 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { signUp, user } = useAuth();
+
+  // Redirect if already logged in
+  if (user) {
+    navigate("/dashboard");
+    return null;
+  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,41 +38,22 @@ const Register = () => {
       return;
     }
 
-    // Check if username or email already exists
-    const users = getUsers();
-    const existingUser = users.find(u => u.username === username || u.email === email);
-    
-    if (existingUser) {
+    try {
+      await signUp(email, password, username);
+      toast({
+        title: "Welcome to DeadPool 2025!",
+        description: "Account created successfully. Please check your email to verify your account.",
+      });
+      navigate("/login");
+    } catch (error: any) {
       toast({
         title: "Registration failed",
-        description: "Username or email already exists",
+        description: error.message || "Failed to create account",
         variant: "destructive",
       });
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    // Create new user
-    const newUser: User = {
-      id: generateId(),
-      username,
-      email,
-      isAdmin: false,
-      totalScore: 0,
-      createdAt: new Date().toISOString()
-    };
-
-    users.push(newUser);
-    saveUsers(users);
-    setCurrentUser(newUser);
-
-    toast({
-      title: "Welcome to DeadPool 2025!",
-      description: `Account created for ${username}`,
-    });
-
-    navigate("/dashboard");
-    setIsLoading(false);
   };
 
   return (
