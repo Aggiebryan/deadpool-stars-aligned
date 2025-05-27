@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,36 +8,52 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Skull, Shield, Users, Plus, LogOut, Calendar } from "lucide-react";
-import { 
-  getCurrentUser, 
-  setCurrentUser, 
-  getDeceasedCelebrities, 
-  saveDeceasedCelebrities, 
-  getPicks, 
-  savePicks,
-  getUsers,
-  saveUsers,
-  generateId,
-  updateUserScore
-} from "@/utils/localStorage";
+import { Skull, Shield, Users, Plus, LogOut, Calendar, Rss, Play, Clock, AlertCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { DeceasedCelebrity } from "@/types";
-import { calculateScore, calculateAge, checkIfBirthday, checkIfMajorHoliday, getWeekNumber, MAJOR_HOLIDAYS_2025 } from "@/utils/gameLogic";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+interface DeceasedCelebrity {
+  id: string;
+  canonical_name: string;
+  date_of_death: string;
+  age_at_death: number;
+  cause_of_death_category: string;
+  cause_of_death_details?: string;
+}
+
+interface RSSFeed {
+  id: string;
+  name: string;
+  url: string;
+  is_active: boolean;
+}
+
+interface FetchLog {
+  id: string;
+  started_at: string;
+  completed_at?: string;
+  status: 'running' | 'completed' | 'failed';
+  deaths_found: number;
+  deaths_added: number;
+  picks_scored: number;
+  error_message?: string;
+}
 
 const AdminDashboard = () => {
-  const [currentUser, setCurrentUserState] = useState(getCurrentUser());
-  const [activeTab, setActiveTab] = useState<'overview' | 'addDeath' | 'manageDeath' | 'users'>('overview');
-  const [deceasedCelebrities, setDeceasedCelebrities] = useState<DeceasedCelebrity[]>([]);
+  const { user, profile } = useAuth();
+  const [activeTab, setActiveTab] = useState<'overview' | 'addDeath' | 'manageDeath' | 'feeds' | 'monitoring'>('overview');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Form state for adding new death
   const [newDeath, setNewDeath] = useState({
     canonicalName: '',
     dateOfBirth: '',
     dateOfDeath: '',
-    causeOfDeathCategory: 'Natural' as DeceasedCelebrity['causeOfDeathCategory'],
+    causeOfDeathCategory: 'Natural' as any,
     causeOfDeathDetails: '',
     diedDuringPublicEvent: false,
     diedInExtremeSport: false,
@@ -46,136 +61,144 @@ const AdminDashboard = () => {
     isLastDeathOfYear: false
   });
 
+  // RSS Feed form state
+  const [newFeed, setNewFeed] = useState({ name: '', url: '' });
+
   useEffect(() => {
-    if (!currentUser || !currentUser.isAdmin) {
+    if (!user || !profile?.is_admin) {
       navigate("/login");
-      return;
     }
+  }, [user, profile, navigate]);
 
-    loadDeceasedCelebrities();
-  }, [currentUser, navigate]);
+  // Queries
+  const { data: deceasedCelebrities = [] } = useQuery({
+    queryKey: ['deceased-celebrities'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('deceased_celebrities')
+        .select('*')
+        .eq('game_year', 2025)
+        .order('date_of_death', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
 
-  const loadDeceasedCelebrities = () => {
-    const deceased = getDeceasedCelebrities().filter(d => d.gameYear === 2025);
-    deceased.sort((a, b) => new Date(b.dateOfDeath).getTime() - new Date(a.dateOfDeath).getTime());
-    setDeceasedCelebrities(deceased);
-  };
+  const { data: users = [] } = useQuery({
+    queryKey: ['profiles'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_admin', false)
+        .order('total_score', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
 
-  const handleAddDeath = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) return;
+  const { data: picks = [] } = useQuery({
+    queryKey: ['celebrity-picks'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('celebrity_picks')
+        .select('*')
+        .eq('game_year', 2025);
+      if (error) throw error;
+      return data;
+    }
+  });
 
-    setIsLoading(true);
+  const { data: rssFeeds = [] } = useQuery({
+    queryKey: ['rss-feeds'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rss_feeds')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
 
-    try {
-      // Calculate age and special circumstances
-      const ageAtDeath = calculateAge(newDeath.dateOfBirth, newDeath.dateOfDeath);
-      const diedOnBirthday = checkIfBirthday(newDeath.dateOfBirth, newDeath.dateOfDeath);
-      const diedOnMajorHoliday = checkIfMajorHoliday(newDeath.dateOfDeath, MAJOR_HOLIDAYS_2025);
+  const { data: fetchLogs = [] } = useQuery({
+    queryKey: ['fetch-logs'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('fetch_logs')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data;
+    }
+  });
 
-      // Create new deceased celebrity record
-      const deceasedCelebrity: DeceasedCelebrity = {
-        id: generateId(),
-        canonicalName: newDeath.canonicalName.trim(),
-        dateOfBirth: newDeath.dateOfBirth,
-        dateOfDeath: newDeath.dateOfDeath,
-        ageAtDeath,
-        causeOfDeathCategory: newDeath.causeOfDeathCategory,
-        causeOfDeathDetails: newDeath.causeOfDeathDetails.trim(),
-        diedDuringPublicEvent: newDeath.diedDuringPublicEvent,
-        diedInExtremeSport: newDeath.diedInExtremeSport,
-        diedOnBirthday,
-        diedOnMajorHoliday,
-        isFirstDeathOfYear: newDeath.isFirstDeathOfYear,
-        isLastDeathOfYear: newDeath.isLastDeathOfYear,
-        gameYear: 2025,
-        enteredByAdminId: currentUser.id,
-        createdAt: new Date().toISOString()
-      };
-
-      // Save deceased celebrity
-      const allDeceased = getDeceasedCelebrities();
-      allDeceased.push(deceasedCelebrity);
-      saveDeceasedCelebrities(allDeceased);
-
-      // Find matching picks and score them
-      const allPicks = getPicks();
-      const matchingPicks = allPicks.filter(pick => 
-        pick.celebrityName.toLowerCase() === deceasedCelebrity.canonicalName.toLowerCase() &&
-        pick.gameYear === 2025 &&
-        !pick.isHit
-      );
-
-      console.log(`Found ${matchingPicks.length} matching picks for ${deceasedCelebrity.canonicalName}`);
-
-      if (matchingPicks.length > 0) {
-        // Calculate weekly deaths for bonus
-        const deathWeek = getWeekNumber(deceasedCelebrity.dateOfDeath);
-        const otherDeathsThisWeek = allDeceased.filter(d => 
-          d.gameYear === 2025 && 
-          d.id !== deceasedCelebrity.id &&
-          getWeekNumber(d.dateOfDeath) === deathWeek
-        ).length;
-
-        // Score each matching pick
-        const users = getUsers();
-        
-        matchingPicks.forEach(pick => {
-          const scoreBreakdown = calculateScore(deceasedCelebrity, otherDeathsThisWeek);
-          
-          // Update pick
-          pick.isHit = true;
-          pick.pointsAwarded = scoreBreakdown.totalPoints;
-
-          // Update user's total score
-          const user = users.find(u => u.id === pick.userId);
-          if (user) {
-            user.totalScore += scoreBreakdown.totalPoints;
-            console.log(`Updated ${user.username}'s score: +${scoreBreakdown.totalPoints} (total: ${user.totalScore})`);
-          }
-        });
-
-        // Save updates
-        savePicks(allPicks);
-        saveUsers(users);
-      }
-
-      // Reset form
-      setNewDeath({
-        canonicalName: '',
-        dateOfBirth: '',
-        dateOfDeath: '',
-        causeOfDeathCategory: 'Natural',
-        causeOfDeathDetails: '',
-        diedDuringPublicEvent: false,
-        diedInExtremeSport: false,
-        isFirstDeathOfYear: false,
-        isLastDeathOfYear: false
-      });
-
-      loadDeceasedCelebrities();
-
+  // Mutations
+  const fetchDeathsMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('fetch-celebrity-deaths');
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
       toast({
-        title: "Death recorded successfully",
-        description: `${deceasedCelebrity.canonicalName} has been added. ${matchingPicks.length} player(s) scored points.`,
+        title: "Death fetch started",
+        description: "Celebrity deaths are being fetched and processed.",
       });
-
-      setActiveTab('overview');
-
-    } catch (error) {
-      console.error('Error adding death:', error);
+      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
+      queryClient.invalidateQueries({ queryKey: ['fetch-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['celebrity-picks'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    },
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to record death. Please try again.",
+        description: error.message || "Failed to fetch deaths",
         variant: "destructive",
       });
     }
+  });
 
-    setIsLoading(false);
-  };
+  const addFeedMutation = useMutation({
+    mutationFn: async (feed: { name: string; url: string }) => {
+      const { data, error } = await supabase
+        .from('rss_feeds')
+        .insert(feed)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: "RSS feed added successfully" });
+      setNewFeed({ name: '', url: '' });
+      queryClient.invalidateQueries({ queryKey: ['rss-feeds'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error adding RSS feed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const toggleFeedMutation = useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const { error } = await supabase
+        .from('rss_feeds')
+        .update({ is_active })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rss-feeds'] });
+    }
+  });
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate("/");
     toast({
       title: "Logged out",
@@ -183,13 +206,22 @@ const AdminDashboard = () => {
     });
   };
 
-  if (!currentUser || !currentUser.isAdmin) {
+  const handleFetchDeaths = () => {
+    fetchDeathsMutation.mutate();
+  };
+
+  const handleAddFeed = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newFeed.name && newFeed.url) {
+      addFeedMutation.mutate(newFeed);
+    }
+  };
+
+  if (!user || !profile?.is_admin) {
     return null;
   }
 
-  const allUsers = getUsers().filter(u => !u.isAdmin);
-  const allPicks = getPicks();
-  const totalHits = allPicks.filter(pick => pick.isHit).length;
+  const totalHits = picks.filter(pick => pick.is_hit).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -205,7 +237,7 @@ const AdminDashboard = () => {
               <Shield className="h-3 w-3 mr-1" />
               Admin
             </Badge>
-            <span className="text-white">Welcome, {currentUser.username}</span>
+            <span className="text-white">Welcome, {profile.username}</span>
             <Button onClick={handleLogout} variant="ghost" className="text-white hover:text-purple-300">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
@@ -220,9 +252,10 @@ const AdminDashboard = () => {
           <div className="flex space-x-4 mb-8">
             {[
               { key: 'overview', label: 'Overview', icon: Users },
+              { key: 'feeds', label: 'RSS Feeds', icon: Rss },
+              { key: 'monitoring', label: 'Monitoring', icon: Clock },
               { key: 'addDeath', label: 'Record Death', icon: Plus },
-              { key: 'manageDeath', label: 'Manage Deaths', icon: Skull },
-              { key: 'users', label: 'Users', icon: Users }
+              { key: 'manageDeath', label: 'Manage Deaths', icon: Skull }
             ].map(({ key, label, icon: Icon }) => (
               <Button
                 key={key}
@@ -238,43 +271,202 @@ const AdminDashboard = () => {
 
           {/* Overview Tab */}
           {activeTab === 'overview' && (
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="space-y-6">
+              <div className="grid md:grid-cols-3 gap-6">
+                <Card className="bg-black/40 border-purple-800/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-purple-400 text-sm">Total Players</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center space-x-2">
+                      <Users className="h-5 w-5 text-purple-400" />
+                      <span className="text-2xl font-bold text-white">{users.length}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-black/40 border-purple-800/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-purple-400 text-sm">Celebrity Deaths</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center space-x-2">
+                      <Skull className="h-5 w-5 text-purple-400" />
+                      <span className="text-2xl font-bold text-white">{deceasedCelebrities.length}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-black/40 border-purple-800/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-purple-400 text-sm">Total Hits</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-5 w-5 text-purple-400" />
+                      <span className="text-2xl font-bold text-white">{totalHits}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
               <Card className="bg-black/40 border-purple-800/30">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-purple-400 text-sm">Total Players</CardTitle>
+                <CardHeader>
+                  <CardTitle className="text-white">Manual Death Fetch</CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Manually trigger the celebrity death fetching process to test automation
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center space-x-2">
-                    <Users className="h-5 w-5 text-purple-400" />
-                    <span className="text-2xl font-bold text-white">{allUsers.length}</span>
-                  </div>
+                  <Button 
+                    onClick={handleFetchDeaths}
+                    disabled={fetchDeathsMutation.isPending}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    <Play className="h-4 w-4 mr-2" />
+                    {fetchDeathsMutation.isPending ? "Fetching Deaths..." : "Fetch Deaths Now"}
+                  </Button>
                 </CardContent>
               </Card>
-              
+            </div>
+          )}
+
+          {/* RSS Feeds Tab */}
+          {activeTab === 'feeds' && (
+            <div className="space-y-6">
               <Card className="bg-black/40 border-purple-800/30">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-purple-400 text-sm">Celebrity Deaths</CardTitle>
+                <CardHeader>
+                  <CardTitle className="text-white">Add RSS Feed</CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Add new RSS feeds to monitor for celebrity deaths
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center space-x-2">
-                    <Skull className="h-5 w-5 text-purple-400" />
-                    <span className="text-2xl font-bold text-white">{deceasedCelebrities.length}</span>
-                  </div>
+                  <form onSubmit={handleAddFeed} className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="feedName" className="text-white">Feed Name</Label>
+                        <Input
+                          id="feedName"
+                          value={newFeed.name}
+                          onChange={(e) => setNewFeed({...newFeed, name: e.target.value})}
+                          className="bg-black/20 border-purple-800/30 text-white"
+                          placeholder="e.g., TMZ Deaths"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="feedUrl" className="text-white">RSS URL</Label>
+                        <Input
+                          id="feedUrl"
+                          type="url"
+                          value={newFeed.url}
+                          onChange={(e) => setNewFeed({...newFeed, url: e.target.value})}
+                          className="bg-black/20 border-purple-800/30 text-white"
+                          placeholder="https://example.com/deaths.rss"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <Button 
+                      type="submit" 
+                      disabled={addFeedMutation.isPending}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      {addFeedMutation.isPending ? "Adding..." : "Add RSS Feed"}
+                    </Button>
+                  </form>
                 </CardContent>
               </Card>
-              
+
               <Card className="bg-black/40 border-purple-800/30">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-purple-400 text-sm">Total Hits</CardTitle>
+                <CardHeader>
+                  <CardTitle className="text-white">Manage RSS Feeds ({rssFeeds.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-5 w-5 text-purple-400" />
-                    <span className="text-2xl font-bold text-white">{totalHits}</span>
+                  <div className="space-y-4">
+                    {rssFeeds.map((feed: RSSFeed) => (
+                      <div key={feed.id} className="flex items-center justify-between p-4 bg-black/20 border border-purple-800/30 rounded-lg">
+                        <div className="flex-1">
+                          <h3 className="text-white font-semibold">{feed.name}</h3>
+                          <p className="text-gray-400 text-sm">{feed.url}</p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Badge className={feed.is_active ? "bg-green-600" : "bg-red-600"}>
+                            {feed.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                          <Button
+                            onClick={() => toggleFeedMutation.mutate({ id: feed.id, is_active: !feed.is_active })}
+                            variant="outline"
+                            size="sm"
+                            className="border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white"
+                          >
+                            {feed.is_active ? "Deactivate" : "Activate"}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {/* Monitoring Tab */}
+          {activeTab === 'monitoring' && (
+            <Card className="bg-black/40 border-purple-800/30">
+              <CardHeader>
+                <CardTitle className="text-white">Fetch Logs ({fetchLogs.length})</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Monitor automated and manual celebrity death fetching operations
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {fetchLogs.map((log: FetchLog) => (
+                    <div key={log.id} className="p-4 bg-black/20 border border-purple-800/30 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <Badge className={
+                            log.status === 'completed' ? "bg-green-600" :
+                            log.status === 'failed' ? "bg-red-600" : "bg-yellow-600"
+                          }>
+                            {log.status === 'running' && <Clock className="h-3 w-3 mr-1" />}
+                            {log.status === 'failed' && <AlertCircle className="h-3 w-3 mr-1" />}
+                            {log.status}
+                          </Badge>
+                          <span className="text-white text-sm">
+                            Started: {new Date(log.started_at).toLocaleString()}
+                          </span>
+                        </div>
+                        {log.completed_at && (
+                          <span className="text-gray-400 text-sm">
+                            Completed: {new Date(log.completed_at).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="text-gray-300">
+                          Deaths Found: <span className="text-white font-semibold">{log.deaths_found}</span>
+                        </div>
+                        <div className="text-gray-300">
+                          Deaths Added: <span className="text-white font-semibold">{log.deaths_added}</span>
+                        </div>
+                        <div className="text-gray-300">
+                          Picks Scored: <span className="text-white font-semibold">{log.picks_scored}</span>
+                        </div>
+                      </div>
+                      {log.error_message && (
+                        <div className="mt-2 p-2 bg-red-900/20 border border-red-800 rounded">
+                          <p className="text-red-400 text-sm">{log.error_message}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Add Death Tab */}
@@ -406,59 +598,21 @@ const AdminDashboard = () => {
                   </p>
                 ) : (
                   <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {deceasedCelebrities.map((deceased) => (
+                    {deceasedCelebrities.map((deceased: DeceasedCelebrity) => (
                       <div key={deceased.id} className="p-4 bg-black/20 border border-purple-800/30 rounded-lg">
                         <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-white font-semibold">{deceased.canonicalName}</h3>
-                          <Badge className="bg-red-600">{deceased.causeOfDeathCategory}</Badge>
+                          <h3 className="text-white font-semibold">{deceased.canonical_name}</h3>
+                          <Badge className="bg-red-600">{deceased.cause_of_death_category}</Badge>
                         </div>
                         <div className="grid grid-cols-2 gap-4 text-sm text-gray-300">
-                          <div>Age: {deceased.ageAtDeath}</div>
-                          <div>Date: {new Date(deceased.dateOfDeath).toLocaleDateString()}</div>
+                          <div>Age: {deceased.age_at_death}</div>
+                          <div>Date: {new Date(deceased.date_of_death).toLocaleDateString()}</div>
                         </div>
-                        {deceased.causeOfDeathDetails && (
-                          <p className="text-gray-400 text-sm mt-2">{deceased.causeOfDeathDetails}</p>
+                        {deceased.cause_of_death_details && (
+                          <p className="text-gray-400 text-sm mt-2">{deceased.cause_of_death_details}</p>
                         )}
                       </div>
                     ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Users Tab */}
-          {activeTab === 'users' && (
-            <Card className="bg-black/40 border-purple-800/30">
-              <CardHeader>
-                <CardTitle className="text-white">Users ({allUsers.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {allUsers.length === 0 ? (
-                  <p className="text-gray-400 text-center py-8">
-                    No users registered yet
-                  </p>
-                ) : (
-                  <div className="space-y-4">
-                    {allUsers.map((user) => {
-                      const userPicks = allPicks.filter(pick => pick.userId === user.id && pick.gameYear === 2025);
-                      const userHits = userPicks.filter(pick => pick.isHit);
-                      return (
-                        <div key={user.id} className="flex items-center justify-between p-4 bg-black/20 border border-purple-800/30 rounded-lg">
-                          <div>
-                            <h3 className="text-white font-semibold">{user.username}</h3>
-                            <p className="text-gray-400 text-sm">{user.email}</p>
-                            <p className="text-gray-400 text-sm">
-                              {userPicks.length}/10 picks • {userHits.length} hits
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-purple-400 font-bold text-lg">{user.totalScore}</p>
-                            <p className="text-gray-400 text-sm">points</p>
-                          </div>
-                        </div>
-                      );
-                    })}
                   </div>
                 )}
               </CardContent>
