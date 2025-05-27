@@ -82,6 +82,28 @@ const Scoreboard = () => {
                 <CardTitle className="text-white text-xl">Rankings</CardTitle>
               </CardHeader>
               <CardContent>
+
+<table className="w-full text-white text-sm">
+  <thead>
+    <tr className="text-purple-400 border-b border-purple-800">
+      <th className="text-left py-2">Rank</th>
+      <th className="text-left py-2">Player</th>
+      <th className="text-left py-2">Score</th>
+      <th className="text-left py-2">Hits</th>
+    </tr>
+  </thead>
+  <tbody>
+    {playerScores.map(player => (
+      <tr key={player.user.id} className="border-b border-purple-800/30 hover:bg-purple-900/20">
+        <td className="py-2">{player.rank}</td>
+        <td className="py-2">{player.user.displayName}</td>
+        <td className="py-2">{player.totalScore}</td>
+        <td className="py-2">{player.hits.length}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
                 {playerScores.length === 0 ? (
                   <p className="text-gray-400 text-center py-4">
                     No players registered yet
@@ -127,6 +149,28 @@ const Scoreboard = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+
+<table className="w-full text-white text-sm">
+  <thead>
+    <tr className="text-purple-400 border-b border-purple-800">
+      <th className="text-left py-2">Rank</th>
+      <th className="text-left py-2">Player</th>
+      <th className="text-left py-2">Score</th>
+      <th className="text-left py-2">Hits</th>
+    </tr>
+  </thead>
+  <tbody>
+    {playerScores.map(player => (
+      <tr key={player.user.id} className="border-b border-purple-800/30 hover:bg-purple-900/20">
+        <td className="py-2">{player.rank}</td>
+        <td className="py-2">{player.user.displayName}</td>
+        <td className="py-2">{player.totalScore}</td>
+        <td className="py-2">{player.hits.length}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
                 {!selectedPlayer ? (
                   <p className="text-gray-400 text-center py-8">
                     Click on a player to see their scoring details
@@ -188,3 +232,24 @@ const Scoreboard = () => {
 };
 
 export default Scoreboard;
+
+
+
+{selectedPlayer && (
+  <Card className="mt-8 bg-black/40 border-purple-800/30">
+    <CardHeader>
+      <CardTitle className="text-white text-xl">
+        {selectedPlayer.user.displayName}'s Picks
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      <ul className="list-disc pl-6 text-purple-300">
+        {selectedPlayer.hits.map((hit, i) => (
+          <li key={i}>
+            {hit.celebrityName} – {hit.pointsAwarded} pts
+          </li>
+        ))}
+      </ul>
+    </CardContent>
+  </Card>
+)}
