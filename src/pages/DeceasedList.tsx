@@ -1,26 +1,19 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skull, ArrowLeft, Calendar, Users } from "lucide-react";
-import { getDeceasedCelebrities, getPicks } from "@/utils/localStorage";
-import { DeceasedCelebrity } from "@/types";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skull, ArrowLeft, RefreshCw } from "lucide-react";
+import { useDeceasedCelebrities, useFetchCelebrityDeaths, SupabaseDeceasedCelebrity } from "@/hooks/useSupabase";
+import { calculateScore } from "@/utils/gameLogic";
+import { toast } from "@/hooks/use-toast";
 
 const DeceasedList = () => {
-  const [deceasedCelebrities, setDeceasedCelebrities] = useState<DeceasedCelebrity[]>([]);
-  const [selectedDeceased, setSelectedDeceased] = useState<DeceasedCelebrity | null>(null);
-
-  useEffect(() => {
-    loadDeceasedCelebrities();
-  }, []);
-
-  const loadDeceasedCelebrities = () => {
-    const deceased = getDeceasedCelebrities().filter(d => d.gameYear === 2025);
-    deceased.sort((a, b) => new Date(b.dateOfDeath).getTime() - new Date(a.dateOfDeath).getTime());
-    setDeceasedCelebrities(deceased);
-  };
+  const [selectedDeceased, setSelectedDeceased] = useState<SupabaseDeceasedCelebrity | null>(null);
+  const { data: deceasedCelebrities = [], isLoading, error } = useDeceasedCelebrities(2025);
+  const fetchDeathsMutation = useFetchCelebrityDeaths();
 
   const getCauseColor = (cause: string) => {
     switch (cause) {
@@ -30,18 +23,60 @@ const DeceasedList = () => {
       case 'Suicide': return 'bg-orange-600';
       case 'RareOrUnusual': return 'bg-purple-600';
       case 'PandemicOrOutbreak': return 'bg-blue-600';
+      case 'Unknown': return 'bg-gray-600';
       default: return 'bg-gray-600';
     }
   };
 
-  const getPickersForCelebrity = (canonicalName: string) => {
-    const allPicks = getPicks();
-    return allPicks.filter(pick => 
-      pick.celebrityName.toLowerCase() === canonicalName.toLowerCase() && 
-      pick.gameYear === 2025 &&
-      pick.isHit
-    );
+  const calculatePoints = (deceased: SupabaseDeceasedCelebrity) => {
+    const scoreBreakdown = calculateScore({
+      ...deceased,
+      id: deceased.id,
+      canonicalName: deceased.canonical_name,
+      dateOfBirth: deceased.date_of_birth || '',
+      dateOfDeath: deceased.date_of_death,
+      ageAtDeath: deceased.age_at_death,
+      causeOfDeathCategory: deceased.cause_of_death_category as any,
+      causeOfDeathDetails: deceased.cause_of_death_details,
+      diedDuringPublicEvent: deceased.died_during_public_event,
+      diedInExtremeSport: deceased.died_in_extreme_sport,
+      diedOnBirthday: deceased.died_on_birthday,
+      diedOnMajorHoliday: deceased.died_on_major_holiday,
+      isFirstDeathOfYear: deceased.is_first_death_of_year,
+      isLastDeathOfYear: deceased.is_last_death_of_year,
+      gameYear: deceased.game_year,
+      enteredByAdminId: '',
+      createdAt: deceased.created_at
+    });
+    return scoreBreakdown.totalPoints;
   };
+
+  const handleRefreshDeaths = async () => {
+    try {
+      await fetchDeathsMutation.mutateAsync();
+      toast({
+        title: "Success",
+        description: "Celebrity deaths updated from external sources"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch celebrity deaths",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-white text-center">
+          <h2 className="text-2xl font-bold mb-4">Error Loading Deaths</h2>
+          <p className="text-gray-400">Failed to load celebrity death data</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -52,186 +87,216 @@ const DeceasedList = () => {
             <Skull className="h-8 w-8 text-purple-400" />
             <h1 className="text-2xl font-bold text-white">DeadPool 2025</h1>
           </Link>
-          <Link to="/">
-            <Button variant="ghost" className="text-white hover:text-purple-300">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Home
+          <div className="flex items-center space-x-4">
+            <Button 
+              onClick={handleRefreshDeaths}
+              disabled={fetchDeathsMutation.isPending}
+              variant="outline" 
+              className="border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${fetchDeathsMutation.isPending ? 'animate-spin' : ''}`} />
+              Update Deaths
             </Button>
-          </Link>
+            <Link to="/">
+              <Button variant="ghost" className="text-white hover:text-purple-300">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Home
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <h1 className="text-4xl font-bold text-white mb-8 text-center">
             <Skull className="inline h-10 w-10 text-red-400 mr-3" />
             Celebrity Deaths 2025
           </h1>
 
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* Deaths List */}
-            <Card className="bg-black/40 border-purple-800/30">
-              <CardHeader>
-                <CardTitle className="text-white text-xl">
-                  Recent Deaths ({deceasedCelebrities.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {deceasedCelebrities.length === 0 ? (
-                  <p className="text-gray-400 text-center py-8">
-                    No celebrity deaths recorded yet for 2025
-                  </p>
-                ) : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {deceasedCelebrities.map((deceased) => {
-                      const pickers = getPickersForCelebrity(deceased.canonicalName);
-                      return (
-                        <div
-                          key={deceased.id}
-                          className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                            selectedDeceased?.id === deceased.id
-                              ? 'bg-purple-900/40 border border-purple-600/50'
-                              : 'bg-black/20 hover:bg-black/40'
-                          }`}
-                          onClick={() => setSelectedDeceased(deceased)}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-white font-semibold">{deceased.canonicalName}</h3>
-                            <Badge className={getCauseColor(deceased.causeOfDeathCategory)}>
-                              {deceased.causeOfDeathCategory}
+          <div className="grid lg:grid-cols-3 gap-8">
+            {/* Deaths Table */}
+            <div className="lg:col-span-2">
+              <Card className="bg-black/40 border-purple-800/30">
+                <CardHeader>
+                  <CardTitle className="text-white text-xl">
+                    Recent Deaths ({deceasedCelebrities.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-400 mx-auto"></div>
+                      <p className="text-gray-400 mt-4">Loading celebrity deaths...</p>
+                    </div>
+                  ) : deceasedCelebrities.length === 0 ? (
+                    <p className="text-gray-400 text-center py-8">
+                      No celebrity deaths recorded yet for 2025
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-purple-300">Date of Death</TableHead>
+                            <TableHead className="text-purple-300">Celebrity Name</TableHead>
+                            <TableHead className="text-purple-300">Cause of Death</TableHead>
+                            <TableHead className="text-purple-300">Age</TableHead>
+                            <TableHead className="text-purple-300">Points</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {deceasedCelebrities.map((deceased) => (
+                            <TableRow
+                              key={deceased.id}
+                              className={`cursor-pointer transition-colors ${
+                                selectedDeceased?.id === deceased.id
+                                  ? 'bg-purple-900/40'
+                                  : 'hover:bg-black/40'
+                              }`}
+                              onClick={() => setSelectedDeceased(deceased)}
+                            >
+                              <TableCell className="text-white">
+                                {new Date(deceased.date_of_death).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell className="text-white font-medium">
+                                {deceased.canonical_name}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={getCauseColor(deceased.cause_of_death_category)}>
+                                  {deceased.cause_of_death_category}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-white">
+                                {deceased.age_at_death}
+                              </TableCell>
+                              <TableCell className="text-green-400 font-bold">
+                                {calculatePoints(deceased)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Death Details */}
+            <div className="lg:col-span-1">
+              <Card className="bg-black/40 border-purple-800/30">
+                <CardHeader>
+                  <CardTitle className="text-white text-xl">
+                    {selectedDeceased ? 'Death Details' : 'Select a Celebrity'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {!selectedDeceased ? (
+                    <p className="text-gray-400 text-center py-8">
+                      Click on a celebrity to see death details and scoring information
+                    </p>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Basic Info */}
+                      <div>
+                        <h3 className="text-white text-lg font-semibold mb-3">{selectedDeceased.canonical_name}</h3>
+                        <div className="space-y-2 text-sm">
+                          {selectedDeceased.date_of_birth && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Date of Birth:</span>
+                              <span className="text-white">{new Date(selectedDeceased.date_of_birth).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Date of Death:</span>
+                            <span className="text-white">{new Date(selectedDeceased.date_of_death).toLocaleDateString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Age at Death:</span>
+                            <span className="text-white">{selectedDeceased.age_at_death} years old</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Cause of Death:</span>
+                            <Badge className={getCauseColor(selectedDeceased.cause_of_death_category)}>
+                              {selectedDeceased.cause_of_death_category}
                             </Badge>
                           </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-400">
-                              Age {deceased.ageAtDeath} • {new Date(deceased.dateOfDeath).toLocaleDateString()}
-                            </span>
-                            {pickers.length > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Total Points:</span>
+                            <span className="text-green-400 font-bold">{calculatePoints(selectedDeceased)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Special Circumstances */}
+                      {(selectedDeceased.died_on_birthday || selectedDeceased.died_on_major_holiday || 
+                        selectedDeceased.died_during_public_event || selectedDeceased.died_in_extreme_sport ||
+                        selectedDeceased.is_first_death_of_year || selectedDeceased.is_last_death_of_year) && (
+                        <div>
+                          <h4 className="text-white font-semibold mb-2">Special Circumstances</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedDeceased.died_on_birthday && (
+                              <Badge variant="outline" className="border-yellow-400 text-yellow-400">
+                                Died on Birthday (+15 pts)
+                              </Badge>
+                            )}
+                            {selectedDeceased.died_on_major_holiday && (
+                              <Badge variant="outline" className="border-blue-400 text-blue-400">
+                                Died on Holiday (+10 pts)
+                              </Badge>
+                            )}
+                            {selectedDeceased.died_during_public_event && (
+                              <Badge variant="outline" className="border-green-400 text-green-400">
+                                During Public Event (+25 pts)
+                              </Badge>
+                            )}
+                            {selectedDeceased.died_in_extreme_sport && (
+                              <Badge variant="outline" className="border-orange-400 text-orange-400">
+                                Extreme Sport (+30 pts)
+                              </Badge>
+                            )}
+                            {selectedDeceased.is_first_death_of_year && (
                               <Badge variant="outline" className="border-purple-400 text-purple-400">
-                                {pickers.length} hit{pickers.length !== 1 ? 's' : ''}
+                                First Death of Year (+10 pts)
+                              </Badge>
+                            )}
+                            {selectedDeceased.is_last_death_of_year && (
+                              <Badge variant="outline" className="border-red-400 text-red-400">
+                                Last Death of Year (+10 pts)
                               </Badge>
                             )}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      )}
 
-            {/* Death Details */}
-            <Card className="bg-black/40 border-purple-800/30">
-              <CardHeader>
-                <CardTitle className="text-white text-xl">
-                  {selectedDeceased ? 'Death Details' : 'Select a Celebrity'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!selectedDeceased ? (
-                  <p className="text-gray-400 text-center py-8">
-                    Click on a celebrity to see death details and scoring information
-                  </p>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Basic Info */}
-                    <div>
-                      <h3 className="text-white text-lg font-semibold mb-3">{selectedDeceased.canonicalName}</h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+                      {/* Additional Details */}
+                      {selectedDeceased.cause_of_death_details && (
                         <div>
-                          <p className="text-gray-400">Date of Birth</p>
-                          <p className="text-white">{new Date(selectedDeceased.dateOfBirth).toLocaleDateString()}</p>
+                          <h4 className="text-white font-semibold mb-2">Additional Details</h4>
+                          <p className="text-gray-300 text-sm">{selectedDeceased.cause_of_death_details}</p>
                         </div>
+                      )}
+
+                      {/* Source */}
+                      {selectedDeceased.source_url && (
                         <div>
-                          <p className="text-gray-400">Date of Death</p>
-                          <p className="text-white">{new Date(selectedDeceased.dateOfDeath).toLocaleDateString()}</p>
+                          <h4 className="text-white font-semibold mb-2">Source</h4>
+                          <a 
+                            href={selectedDeceased.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-purple-400 hover:text-purple-300 text-sm underline"
+                          >
+                            View Original Article
+                          </a>
                         </div>
-                        <div>
-                          <p className="text-gray-400">Age at Death</p>
-                          <p className="text-white">{selectedDeceased.ageAtDeath} years old</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400">Cause of Death</p>
-                          <Badge className={getCauseColor(selectedDeceased.causeOfDeathCategory)}>
-                            {selectedDeceased.causeOfDeathCategory}
-                          </Badge>
-                        </div>
-                      </div>
+                      )}
                     </div>
-
-                    {/* Special Circumstances */}
-                    {(selectedDeceased.diedOnBirthday || selectedDeceased.diedOnMajorHoliday || 
-                      selectedDeceased.diedDuringPublicEvent || selectedDeceased.diedInExtremeSport ||
-                      selectedDeceased.isFirstDeathOfYear || selectedDeceased.isLastDeathOfYear) && (
-                      <div>
-                        <h4 className="text-white font-semibold mb-2">Special Circumstances</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedDeceased.diedOnBirthday && (
-                            <Badge variant="outline" className="border-yellow-400 text-yellow-400">
-                              Died on Birthday (+15 pts)
-                            </Badge>
-                          )}
-                          {selectedDeceased.diedOnMajorHoliday && (
-                            <Badge variant="outline" className="border-blue-400 text-blue-400">
-                              Died on Holiday (+10 pts)
-                            </Badge>
-                          )}
-                          {selectedDeceased.diedDuringPublicEvent && (
-                            <Badge variant="outline" className="border-green-400 text-green-400">
-                              During Public Event (+25 pts)
-                            </Badge>
-                          )}
-                          {selectedDeceased.diedInExtremeSport && (
-                            <Badge variant="outline" className="border-orange-400 text-orange-400">
-                              Extreme Sport (+30 pts)
-                            </Badge>
-                          )}
-                          {selectedDeceased.isFirstDeathOfYear && (
-                            <Badge variant="outline" className="border-purple-400 text-purple-400">
-                              First Death of Year (+10 pts)
-                            </Badge>
-                          )}
-                          {selectedDeceased.isLastDeathOfYear && (
-                            <Badge variant="outline" className="border-red-400 text-red-400">
-                              Last Death of Year (+10 pts)
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Additional Details */}
-                    {selectedDeceased.causeOfDeathDetails && (
-                      <div>
-                        <h4 className="text-white font-semibold mb-2">Additional Details</h4>
-                        <p className="text-gray-300 text-sm">{selectedDeceased.causeOfDeathDetails}</p>
-                      </div>
-                    )}
-
-                    {/* Players who picked this celebrity */}
-                    <div>
-                      <h4 className="text-white font-semibold mb-2">Players who scored</h4>
-                      {(() => {
-                        const pickers = getPickersForCelebrity(selectedDeceased.canonicalName);
-                        return pickers.length === 0 ? (
-                          <p className="text-gray-400 text-sm">No players had this celebrity in their picks</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {pickers.map((pick) => (
-                              <div key={pick.id} className="flex items-center justify-between p-2 bg-green-900/20 rounded">
-                                <span className="text-green-400">Player hit!</span>
-                                <Badge className="bg-green-600">
-                                  +{pick.pointsAwarded} pts
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* Navigation */}
