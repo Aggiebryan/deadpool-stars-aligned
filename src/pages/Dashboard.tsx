@@ -1,6 +1,6 @@
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { UserStatsCards } from "@/components/dashboard/UserStatsCards";
 import { AddPickForm } from "@/components/dashboard/AddPickForm";
@@ -12,6 +12,7 @@ import { toast } from "@/hooks/use-toast";
 
 const Dashboard = () => {
   const { user, profile, signOut } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data: picks = [] } = useQuery({
     queryKey: ['user-picks', user?.id],
@@ -59,6 +60,66 @@ const Dashboard = () => {
     }
   });
 
+  const addPickMutation = useMutation({
+    mutationFn: async (celebrityName: string) => {
+      if (!user?.id) throw new Error('User not authenticated');
+      
+      const { data, error } = await supabase
+        .from('celebrity_picks')
+        .insert({
+          user_id: user.id,
+          celebrity_name: celebrityName,
+          game_year: 2025,
+          is_hit: false,
+          points_awarded: 0
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-picks', user?.id] });
+      toast({
+        title: "Pick added successfully",
+        description: "Your celebrity pick has been added to your list.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error adding pick",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  const removePickMutation = useMutation({
+    mutationFn: async (pickId: string) => {
+      const { error } = await supabase
+        .from('celebrity_picks')
+        .delete()
+        .eq('id', pickId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-picks', user?.id] });
+      toast({
+        title: "Pick removed",
+        description: "Your celebrity pick has been removed from your list.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error removing pick",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -73,6 +134,14 @@ const Dashboard = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleAddPick = async (celebrityName: string) => {
+    await addPickMutation.mutateAsync(celebrityName);
+  };
+
+  const handleRemovePick = async (pickId: string) => {
+    await removePickMutation.mutateAsync(pickId);
   };
 
   const totalScore = picks.reduce((sum, pick) => sum + (pick.points_awarded || 0), 0);
@@ -127,10 +196,18 @@ const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              <AddPickForm userId={user?.id} currentPicksCount={picksCount} maxPicks={maxPicks} />
+              <AddPickForm 
+                picksCount={picksCount} 
+                maxPicks={maxPicks} 
+                onAddPick={handleAddPick}
+              />
             </div>
 
-            <PicksList picks={picks} />
+            <PicksList 
+              picks={picks} 
+              maxPicks={maxPicks} 
+              onRemovePick={handleRemovePick}
+            />
           </div>
         </div>
       </div>
