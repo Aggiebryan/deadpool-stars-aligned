@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, User, Trophy, Target } from "lucide-react";
+import { RecentDeaths } from "@/components/dashboard/RecentDeaths";
 
 interface Pick {
   id: string;
@@ -93,14 +94,14 @@ const PlayerDetails = () => {
                   <User className="h-5 w-5 text-blue-400" />
                   <div>
                     <p className="text-sm text-gray-400">Total Picks</p>
-                    <p className="text-2xl font-bold text-blue-400">{picks.length}</p>
+                    <p className="text-2xl font-bold text-blue-400">{picks.length}/10</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card className="bg-black/40 border-purple-800/30">
+          <Card className="bg-black/40 border-purple-800/30 mb-8">
             <CardHeader>
               <CardTitle className="text-white">Celebrity Picks for 2025</CardTitle>
             </CardHeader>
@@ -143,6 +144,8 @@ const PlayerDetails = () => {
               )}
             </CardContent>
           </Card>
+
+          <RecentDeaths />
         </div>
       </div>
     </div>

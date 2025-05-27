@@ -1,10 +1,10 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { UserStatsCards } from "@/components/dashboard/UserStatsCards";
 import { AddPickForm } from "@/components/dashboard/AddPickForm";
 import { PicksList } from "@/components/dashboard/PicksList";
+import { RecentDeaths } from "@/components/dashboard/RecentDeaths";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -146,7 +146,7 @@ const Dashboard = () => {
 
   const totalScore = picks.reduce((sum, pick) => sum + (pick.points_awarded || 0), 0);
   const picksCount = picks.length;
-  const maxPicks = 20;
+  const maxPicks = 10; // Changed from 20 to 10
   const hitCount = picks.filter(pick => pick.is_hit).length;
 
   return (
@@ -208,6 +208,10 @@ const Dashboard = () => {
               maxPicks={maxPicks} 
               onRemovePick={handleRemovePick}
             />
+          </div>
+
+          <div className="mt-8">
+            <RecentDeaths />
           </div>
         </div>
       </div>

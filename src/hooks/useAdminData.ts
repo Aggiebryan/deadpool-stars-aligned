@@ -102,6 +102,7 @@ export const useAdminData = () => {
       });
       queryClient.invalidateQueries({ queryKey: ['deceased-celebrities-admin'] });
       queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-deaths'] });
       queryClient.invalidateQueries({ queryKey: ['fetch-logs'] });
       queryClient.invalidateQueries({ queryKey: ['celebrity-picks'] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
