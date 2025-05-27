@@ -46,93 +46,77 @@ async function scrapeWikipediaDeaths(year: number, month: string): Promise<Celeb
     
     let currentDay = 1;
     
-    // Find day headings and process list items under them
-    const headings = contentDiv.querySelectorAll('h3');
+    // Look for list items that contain death entries
+    const listItems = contentDiv.querySelectorAll('ul li');
     
-    for (const heading of headings) {
-      const dayMatch = heading.textContent?.match(/(\d{1,2})/);
-      if (dayMatch) {
-        currentDay = parseInt(dayMatch[1]);
+    for (const li of listItems) {
+      const nameLink = li.querySelector('a[href^="/wiki/"]:not([href*="Deaths_in"])');
+      if (!nameLink) continue;
+      
+      const name = nameLink.textContent?.trim();
+      if (!name || name.length < 2) continue;
+      
+      const text = li.textContent || '';
+      
+      // Extract age - look for pattern like ", 75,"
+      const ageMatch = text.match(/,\s*(\d{1,3}),/);
+      const age = ageMatch ? parseInt(ageMatch[1]) : undefined;
+      
+      // Skip if no valid age or age is unrealistic
+      if (!age || age < 10 || age > 120) continue;
+      
+      // Extract description
+      let description = text;
+      if (ageMatch) {
+        const afterAge = text.split(ageMatch[0])[1];
+        description = afterAge ? afterAge.trim() : text;
+      }
+      
+      // Basic cause of death mapping
+      let cause = 'Natural';
+      const descLower = description.toLowerCase();
+      
+      if (descLower.includes('cancer') || descLower.includes('heart') || descLower.includes('stroke')) {
+        cause = 'Natural';
+      } else if (descLower.includes('accident') || descLower.includes('crash')) {
+        cause = 'Accidental';
+      } else if (descLower.includes('suicide')) {
+        cause = 'Suicide';
+      } else if (descLower.includes('murder') || descLower.includes('shot') || descLower.includes('killed')) {
+        cause = 'Violent';
+      } else if (descLower.includes('overdose') || descLower.includes('drug')) {
+        cause = 'RareOrUnusual';
+      }
+      
+      // Check if notable - look for occupation keywords
+      const notableKeywords = [
+        'actor', 'actress', 'musician', 'singer', 'politician', 'author', 'artist', 
+        'athlete', 'director', 'producer', 'writer', 'composer', 'dancer', 'comedian',
+        'journalist', 'broadcaster', 'chef', 'designer', 'model', 'activist', 'judge',
+        'governor', 'senator', 'representative', 'mayor', 'scientist', 'professor'
+      ];
+      
+      const isNotable = notableKeywords.some(keyword => descLower.includes(keyword));
+      
+      if (isNotable) {
+        const monthNum = {
+          'January': '01', 'February': '02', 'March': '03', 'April': '04',
+          'May': '05', 'June': '06', 'July': '07', 'August': '08',
+          'September': '09', 'October': '10', 'November': '11', 'December': '12'
+        }[month] || '01';
         
-        // Find the next sibling elements until we hit another h3
-        let nextElement = heading.nextElementSibling;
-        while (nextElement && nextElement.tagName !== 'H3') {
-          if (nextElement.tagName === 'UL') {
-            const listItems = nextElement.querySelectorAll('li');
-            
-            for (const li of listItems) {
-              const nameLink = li.querySelector('a[href^="/wiki/"]:not([href*="Deaths_in"])');
-              if (!nameLink) continue;
-              
-              const name = nameLink.textContent?.trim();
-              if (!name || name.length < 2) continue;
-              
-              const text = li.textContent || '';
-              
-              // Extract age - look for pattern like ", 75,"
-              const ageMatch = text.match(/,\s*(\d{1,3}),/);
-              const age = ageMatch ? parseInt(ageMatch[1]) : undefined;
-              
-              // Skip if no valid age or age is unrealistic
-              if (!age || age < 10 || age > 120) continue;
-              
-              // Extract description
-              let description = text;
-              if (ageMatch) {
-                const afterAge = text.split(ageMatch[0])[1];
-                description = afterAge ? afterAge.trim() : text;
-              }
-              
-              // Basic cause of death mapping
-              let cause = 'Natural';
-              const descLower = description.toLowerCase();
-              
-              if (descLower.includes('cancer') || descLower.includes('heart') || descLower.includes('stroke')) {
-                cause = 'Natural';
-              } else if (descLower.includes('accident') || descLower.includes('crash')) {
-                cause = 'Accidental';
-              } else if (descLower.includes('suicide')) {
-                cause = 'Suicide';
-              } else if (descLower.includes('murder') || descLower.includes('shot') || descLower.includes('killed')) {
-                cause = 'Violent';
-              } else if (descLower.includes('overdose') || descLower.includes('drug')) {
-                cause = 'RareOrUnusual';
-              }
-              
-              // Check if notable - look for occupation keywords
-              const notableKeywords = [
-                'actor', 'actress', 'musician', 'singer', 'politician', 'author', 'artist', 
-                'athlete', 'director', 'producer', 'writer', 'composer', 'dancer', 'comedian',
-                'journalist', 'broadcaster', 'chef', 'designer', 'model', 'activist', 'judge',
-                'governor', 'senator', 'representative', 'mayor', 'scientist', 'professor'
-              ];
-              
-              const isNotable = notableKeywords.some(keyword => descLower.includes(keyword));
-              
-              if (isNotable) {
-                const monthNum = {
-                  'January': '01', 'February': '02', 'March': '03', 'April': '04',
-                  'May': '05', 'June': '06', 'July': '07', 'August': '08',
-                  'September': '09', 'October': '10', 'November': '11', 'December': '12'
-                }[month] || '01';
-                
-                const dateOfDeath = `${year}-${monthNum}-${currentDay.toString().padStart(2, '0')}`;
-                
-                deaths.push({
-                  name,
-                  dateOfDeath,
-                  age,
-                  cause,
-                  description: description.substring(0, 500),
-                  sourceUrl: url
-                });
-                
-                console.log(`Added death: ${name}, ${age}, ${dateOfDeath}`);
-              }
-            }
-          }
-          nextElement = nextElement.nextElementSibling;
-        }
+        const dateOfDeath = `${year}-${monthNum}-${currentDay.toString().padStart(2, '0')}`;
+        
+        deaths.push({
+          name,
+          dateOfDeath,
+          age,
+          cause,
+          description: description.substring(0, 500),
+          sourceUrl: url
+        });
+        
+        console.log(`Added death: ${name}, ${age}, ${dateOfDeath}`);
       }
     }
     
@@ -306,24 +290,22 @@ serve(async (req) => {
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
     
-    // Only scrape the current year and last 3 months to avoid timeouts
+    // Only scrape current month and previous month to avoid timeouts
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                        'July', 'August', 'September', 'October', 'November', 'December'];
     
     let allDeaths: CelebrityDeath[] = [];
     
-    // Scrape current year months up to current month + last year's last few months
+    // Just scrape current month and previous month
     const monthsToScrape = [];
     
-    // Add current year months (up to current month)
-    for (let i = 0; i <= currentMonth; i++) {
-      monthsToScrape.push({ year: currentYear, month: monthNames[i] });
-    }
+    // Add current month
+    monthsToScrape.push({ year: currentYear, month: monthNames[currentMonth] });
     
-    // Add last few months of previous year
-    for (let i = Math.max(0, 12 - 3); i < 12; i++) {
-      monthsToScrape.push({ year: currentYear - 1, month: monthNames[i] });
-    }
+    // Add previous month (handling year boundary)
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    monthsToScrape.push({ year: prevYear, month: monthNames[prevMonth] });
     
     console.log(`Scraping ${monthsToScrape.length} months`);
     
@@ -333,7 +315,7 @@ serve(async (req) => {
       allDeaths = allDeaths.concat(deaths);
       
       // Small delay to be polite
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     console.log(`Found ${allDeaths.length} total deaths from Wikipedia`);
