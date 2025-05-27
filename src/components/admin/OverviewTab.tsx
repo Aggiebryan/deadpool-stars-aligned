@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, Users, Skull, Trophy } from "lucide-react";
 import { UseMutationResult } from "@tanstack/react-query";
 import { IncendarScrapeButton } from "./IncendarScrapeButton";
+import { WikipediaScrapeButton } from "./WikipediaScrapeButton";
+import { WikidataScrapeButton } from "./WikidataScrapeButton";
 
 interface OverviewTabProps {
   usersCount: number;
@@ -73,6 +75,8 @@ export const OverviewTab = ({ usersCount, deceasedCelebritiesCount, totalHits, f
               </Button>
               
               <IncendarScrapeButton />
+              <WikipediaScrapeButton />
+              <WikidataScrapeButton />
             </div>
           </CardContent>
         </Card>
