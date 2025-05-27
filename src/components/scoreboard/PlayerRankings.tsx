@@ -1,13 +1,11 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Crown } from "lucide-react";
+import { User, CelebrityPick } from "@/types";
 
 interface PlayerScore {
-  user: {
-    id: string;
-    username: string;
-  };
-  hits: any[];
+  user: User;
+  hits: CelebrityPick[];
   totalScore: number;
   rank: number;
 }

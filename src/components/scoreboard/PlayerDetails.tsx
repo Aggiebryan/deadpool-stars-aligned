@@ -1,19 +1,10 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-interface CelebrityPick {
-  id: string;
-  celebrityName: string;
-  pointsAwarded: number;
-  createdAt: string;
-}
+import { User, CelebrityPick } from "@/types";
 
 interface PlayerScore {
-  user: {
-    id: string;
-    username: string;
-  };
+  user: User;
   hits: CelebrityPick[];
   totalScore: number;
   rank: number;
