@@ -10,6 +10,7 @@ interface RecentDeath {
   id: string;
   canonical_name: string;
   date_of_death: string;
+  age_at_death: number;
   cause_of_death_category: string;
   cause_of_death_details?: string;
 }
@@ -20,7 +21,7 @@ export const RecentDeaths = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deceased_celebrities')
-        .select('id, canonical_name, date_of_death, cause_of_death_category, cause_of_death_details')
+        .select('id, canonical_name, date_of_death, age_at_death, cause_of_death_category, cause_of_death_details')
         .eq('game_year', 2025)
         .eq('is_approved', true)
         .order('date_of_death', { ascending: false })
@@ -61,6 +62,7 @@ export const RecentDeaths = () => {
               <TableRow className="border-purple-800/30">
                 <TableHead className="text-purple-300">Date</TableHead>
                 <TableHead className="text-purple-300">Name</TableHead>
+                <TableHead className="text-purple-300">Age</TableHead>
                 <TableHead className="text-purple-300">Cause</TableHead>
                 <TableHead className="text-purple-300">Description</TableHead>
               </TableRow>
@@ -73,6 +75,9 @@ export const RecentDeaths = () => {
                   </TableCell>
                   <TableCell className="text-white font-semibold">
                     {death.canonical_name}
+                  </TableCell>
+                  <TableCell className="text-white">
+                    {death.age_at_death}
                   </TableCell>
                   <TableCell>
                     <Badge className={getCauseColor(death.cause_of_death_category)}>

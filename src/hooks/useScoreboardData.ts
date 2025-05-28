@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from "react";
-import { getUsers, getPicks } from "@/utils/localStorage";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { User, CelebrityPick } from "@/types";
 
 interface PlayerScore {
@@ -13,19 +14,61 @@ interface PlayerScore {
 export const useScoreboardData = () => {
   const [playerScores, setPlayerScores] = useState<PlayerScore[]>([]);
 
-  const loadScoreboard = () => {
-    const users = getUsers().filter(u => !u.isAdmin);
-    const allPicks = getPicks();
+  // Query all users and their picks from Supabase
+  const { data: users = [] } = useQuery({
+    queryKey: ['scoreboard-users'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_admin', false)
+        .order('total_score', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const { data: picks = [] } = useQuery({
+    queryKey: ['scoreboard-picks'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('celebrity_picks')
+        .select('*')
+        .eq('game_year', 2025)
+        .eq('is_hit', true);
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  useEffect(() => {
+    if (users.length === 0) return;
 
     const scores: PlayerScore[] = users.map(user => {
-      const userPicks = allPicks.filter(pick => pick.userId === user.id && pick.gameYear === 2025);
-      const hits = userPicks.filter(pick => pick.isHit);
-      const totalScore = hits.reduce((sum, hit) => sum + hit.pointsAwarded, 0);
+      const userPicks = picks.filter(pick => pick.user_id === user.id);
+      const hits = userPicks.map(pick => ({
+        id: pick.id,
+        userId: pick.user_id,
+        celebrityName: pick.celebrity_name,
+        gameYear: pick.game_year,
+        isHit: pick.is_hit,
+        pointsAwarded: pick.points_awarded,
+        createdAt: pick.created_at
+      }));
 
       return {
-        user,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          isAdmin: user.is_admin,
+          totalScore: user.total_score,
+          createdAt: user.created_at
+        },
         hits,
-        totalScore,
+        totalScore: user.total_score,
         rank: 0 // Will be calculated after sorting
       };
     });
@@ -37,11 +80,11 @@ export const useScoreboardData = () => {
     });
 
     setPlayerScores(scores);
-  };
+  }, [users, picks]);
 
-  useEffect(() => {
-    loadScoreboard();
-  }, []);
+  const loadScoreboard = () => {
+    // This function is kept for compatibility but data is loaded via React Query
+  };
 
   return { playerScores, loadScoreboard };
 };

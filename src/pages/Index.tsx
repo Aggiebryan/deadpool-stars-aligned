@@ -87,9 +87,16 @@ const Index = () => {
               <Button variant="ghost" className="text-white hover:text-purple-300">Deaths</Button>
             </Link>
             {user ? (
-              <Link to={profile?.is_admin ? "/admin" : "/dashboard"}>
-                <Button className="bg-purple-600 hover:bg-purple-700">Dashboard</Button>
-              </Link>
+              <div className="flex items-center space-x-2">
+                {profile?.is_admin && (
+                  <Link to="/admin">
+                    <Button variant="outline" className="border-red-400 text-red-400 hover:bg-red-400 hover:text-white">Admin</Button>
+                  </Link>
+                )}
+                <Link to={profile?.is_admin ? "/admin" : "/dashboard"}>
+                  <Button className="bg-purple-600 hover:bg-purple-700">Dashboard</Button>
+                </Link>
+              </div>
             ) : (
               <div className="space-x-2">
                 <Link to="/login">

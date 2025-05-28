@@ -8,46 +8,38 @@ const corsHeaders = {
 }
 
 interface WikidataDeath {
-  name: string;
-  dateOfDeath: string;
+  canonical_name: string;
+  date_of_birth: string;
+  date_of_death: string;
+  cause_of_death_details?: string;
   age?: number;
-  cause?: string;
-  occupation?: string;
-  wikidataId: string;
 }
 
-async function queryWikidataDeaths(targetDate: string): Promise<WikidataDeath[]> {
+async function queryWikidataDeaths(startDate: string, endDate: string): Promise<WikidataDeath[]> {
   try {
-    console.log(`Querying Wikidata for deaths on: ${targetDate}`);
+    console.log(`Querying Wikidata for deaths between: ${startDate} and ${endDate}`);
     
     const query = `
-    SELECT ?person ?personLabel ?dateOfDeath ?dateOfBirth ?causeOfDeathLabel ?occupationLabel WHERE {
-      ?person wdt:P31 wd:Q5 ;
-              wdt:P570 ?dateOfDeath .
-      
-      FILTER(STRSTARTS(STR(?dateOfDeath), "${targetDate}"))
+    SELECT ?person ?canonical_name ?date_of_birth ?date_of_death ?cause_of_death_details WHERE {
+      ?person wdt:P31 wd:Q5;                      # instance of human
+              wdt:P570 ?date_of_death;           # date of death
+              wdt:P569 ?date_of_birth;           # date of birth
+              rdfs:label ?canonical_name.        # person's name
 
-      OPTIONAL { ?person wdt:P569 ?dateOfBirth . }
-      OPTIONAL { 
-        ?person wdt:P509 ?causeOfDeathEntity .
-        ?causeOfDeathEntity rdfs:label ?causeOfDeathLabel .
-        FILTER(LANG(?causeOfDeathLabel) = "en")
-      }
-      OPTIONAL {
-        ?person wdt:P106 ?occupationEntity .
-        ?occupationEntity rdfs:label ?occupationLabel .
-        FILTER(LANG(?occupationLabel) = "en")
-      }
-      
-      FILTER EXISTS { ?person wdt:P106 ?someOccupation . }
-      FILTER EXISTS { ?person rdfs:label ?someLabel . FILTER(LANG(?someLabel) = "en") }
+      OPTIONAL { ?person wdt:P509 ?cause_of_death. }  # cause of death
+      OPTIONAL { ?person schema:description ?cause_of_death_details. }
 
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
+      FILTER(?date_of_death >= "${startDate}"^^xsd:date && ?date_of_death <= "${endDate}"^^xsd:date)
+      FILTER(LANG(?canonical_name) = "en")
+      FILTER(LANG(?cause_of_death_details) = "en")
     }
+    ORDER BY DESC(?date_of_death)
     LIMIT 100`;
 
     const encodedQuery = encodeURIComponent(query);
     const url = `https://query.wikidata.org/sparql?query=${encodedQuery}&format=json`;
+    
+    console.log(`Making request to: ${url}`);
     
     const response = await fetch(url, {
       headers: {
@@ -58,65 +50,54 @@ async function queryWikidataDeaths(targetDate: string): Promise<WikidataDeath[]>
     
     if (!response.ok) {
       console.log(`HTTP error ${response.status} from Wikidata`);
-      return [];
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
     const data = await response.json();
+    console.log(`Received ${data.results?.bindings?.length || 0} results from Wikidata`);
+    
     const deaths: WikidataDeath[] = [];
     
     for (const result of data.results.bindings) {
-      const name = result.personLabel?.value;
-      const dodStr = result.dateOfDeath?.value;
-      const dobStr = result.dateOfBirth?.value;
-      const cause = result.causeOfDeathLabel?.value;
-      const occupation = result.occupationLabel?.value;
-      const wikidataId = result.person?.value;
+      const canonical_name = result.canonical_name?.value;
+      const date_of_death = result.date_of_death?.value;
+      const date_of_birth = result.date_of_birth?.value;
+      const cause_of_death_details = result.cause_of_death_details?.value;
       
-      if (!name || !dodStr) continue;
-      
-      let age = undefined;
-      if (dobStr && dodStr) {
-        try {
-          const dob = new Date(dobStr);
-          const dod = new Date(dodStr);
-          age = dod.getFullYear() - dob.getFullYear();
-          if (dod.getMonth() < dob.getMonth() || 
-              (dod.getMonth() === dob.getMonth() && dod.getDate() < dob.getDate())) {
-            age--;
-          }
-        } catch (error) {
-          console.log(`Could not calculate age for ${name}`);
-        }
+      if (!canonical_name || !date_of_death || !date_of_birth) {
+        console.log(`Skipping incomplete record: ${canonical_name}`);
+        continue;
       }
       
-      // Map Wikidata causes to our categories
-      let causeCategory = 'Unknown';
-      if (cause) {
-        const causeLower = cause.toLowerCase();
-        if (causeLower.includes('cancer') || causeLower.includes('heart') || 
-            causeLower.includes('natural') || causeLower.includes('disease')) {
-          causeCategory = 'Natural';
-        } else if (causeLower.includes('suicide')) {
-          causeCategory = 'Suicide';
-        } else if (causeLower.includes('accident') || causeLower.includes('crash')) {
-          causeCategory = 'Accidental';
-        } else if (causeLower.includes('murder') || causeLower.includes('homicide')) {
-          causeCategory = 'Violent';
-        } else if (causeLower.includes('overdose') || causeLower.includes('drug')) {
-          causeCategory = 'RareOrUnusual';
+      // Calculate age
+      let age = undefined;
+      try {
+        const dob = new Date(date_of_birth);
+        const dod = new Date(date_of_death);
+        age = dod.getFullYear() - dob.getFullYear();
+        if (dod.getMonth() < dob.getMonth() || 
+            (dod.getMonth() === dob.getMonth() && dod.getDate() < dob.getDate())) {
+          age--;
         }
+      } catch (error) {
+        console.log(`Could not calculate age for ${canonical_name}`);
+        continue;
+      }
+      
+      if (!age || age < 1 || age > 120) {
+        console.log(`Invalid age (${age}) for ${canonical_name}, skipping`);
+        continue;
       }
       
       deaths.push({
-        name,
-        dateOfDeath: dodStr.split('T')[0],
-        age,
-        cause: causeCategory,
-        occupation,
-        wikidataId
+        canonical_name,
+        date_of_birth: date_of_birth.split('T')[0],
+        date_of_death: date_of_death.split('T')[0],
+        cause_of_death_details,
+        age
       });
       
-      console.log(`Found death: ${name}, age ${age}, cause: ${cause}`);
+      console.log(`Found death: ${canonical_name}, age ${age}`);
     }
     
     console.log(`Extracted ${deaths.length} deaths from Wikidata`);
@@ -124,7 +105,7 @@ async function queryWikidataDeaths(targetDate: string): Promise<WikidataDeath[]>
     
   } catch (error) {
     console.error('Error querying Wikidata:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -133,37 +114,37 @@ async function processDeaths(supabase: any, deaths: WikidataDeath[], logId: stri
   let picksScored = 0;
 
   for (const death of deaths) {
-    if (!death.age || death.age < 1 || death.age > 120) continue;
-
     // Check if already exists
     const { data: existing } = await supabase
       .from('deceased_celebrities')
       .select('id')
-      .eq('canonical_name', death.name)
-      .eq('date_of_death', death.dateOfDeath)
+      .eq('canonical_name', death.canonical_name)
+      .eq('date_of_death', death.date_of_death)
       .single();
     
     if (!existing) {
-      const dateOfDeath = new Date(death.dateOfDeath);
+      const dateOfDeath = new Date(death.date_of_death);
       const gameYear = dateOfDeath.getFullYear();
       
       // Insert new death record
       const { data: newDeath, error } = await supabase
         .from('deceased_celebrities')
         .insert({
-          canonical_name: death.name,
-          date_of_death: death.dateOfDeath,
+          canonical_name: death.canonical_name,
+          date_of_birth: death.date_of_birth,
+          date_of_death: death.date_of_death,
           age_at_death: death.age,
-          cause_of_death_category: death.cause || 'Unknown',
-          cause_of_death_details: death.occupation ? `${death.occupation}` : null,
+          cause_of_death_category: 'Unknown',
+          cause_of_death_details: death.cause_of_death_details,
           game_year: gameYear,
-          source_url: death.wikidataId,
+          source_url: `https://www.wikidata.org/entity/${death.canonical_name}`,
           died_on_birthday: false,
           died_on_major_holiday: false,
           died_during_public_event: false,
           died_in_extreme_sport: false,
           is_first_death_of_year: false,
-          is_last_death_of_year: false
+          is_last_death_of_year: false,
+          is_approved: false
         })
         .select()
         .single();
@@ -171,12 +152,11 @@ async function processDeaths(supabase: any, deaths: WikidataDeath[], logId: stri
       if (error) {
         console.error('Error inserting death:', error);
       } else {
-        console.log(`Inserted death record for ${death.name}`);
+        console.log(`Inserted death record for ${death.canonical_name}`);
         deathsAdded++;
-        
-        const scored = await updateMatchingPicks(supabase, death.name, gameYear, newDeath);
-        picksScored += scored;
       }
+    } else {
+      console.log(`Death already exists: ${death.canonical_name}`);
     }
   }
 
@@ -191,86 +171,6 @@ async function processDeaths(supabase: any, deaths: WikidataDeath[], logId: stri
   return { deathsAdded, picksScored };
 }
 
-async function updateMatchingPicks(supabase: any, celebrityName: string, gameYear: number, deceased: any): Promise<number> {
-  const { data: picks } = await supabase
-    .from('celebrity_picks')
-    .select('*')
-    .ilike('celebrity_name', celebrityName)
-    .eq('game_year', gameYear)
-    .eq('is_hit', false);
-  
-  if (picks && picks.length > 0) {
-    const points = calculatePoints(deceased);
-    
-    for (const pick of picks) {
-      await supabase
-        .from('celebrity_picks')
-        .update({
-          is_hit: true,
-          points_awarded: points
-        })
-        .eq('id', pick.id);
-      
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('total_score')
-        .eq('id', pick.user_id)
-        .single();
-      
-      if (profile) {
-        await supabase
-          .from('profiles')
-          .update({
-            total_score: profile.total_score + points
-          })
-          .eq('id', pick.user_id);
-      }
-    }
-    
-    return picks.length;
-  }
-  
-  return 0;
-}
-
-function calculatePoints(deceased: any): number {
-  let points = 0;
-  const age = deceased.age_at_death || 75;
-  const cause = deceased.cause_of_death_category;
-  
-  points += (100 - age);
-  
-  switch (cause) {
-    case 'Natural':
-      points += age >= 80 ? 5 : 10;
-      break;
-    case 'Accidental':
-      points += age >= 80 ? 15 : 25;
-      break;
-    case 'Violent':
-      points += age >= 80 ? 30 : 50;
-      break;
-    case 'Suicide':
-      points += age >= 80 ? 20 : 40;
-      break;
-    case 'RareOrUnusual':
-      points += 50;
-      break;
-    default:
-      points += 5;
-      break;
-  }
-  
-  if (deceased.died_on_birthday) points += 15;
-  if (deceased.died_on_major_holiday) points += 10;
-  if (deceased.died_during_public_event) points += 25;
-  if (deceased.died_in_extreme_sport) points += 30;
-  if (deceased.is_first_death_of_year) points += 10;
-  if (deceased.is_last_death_of_year) points += 10;
-  
-  return Math.max(points, 0);
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -281,6 +181,12 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
+
+    const { startDate, endDate } = await req.json();
+    
+    if (!startDate || !endDate) {
+      throw new Error('Start date and end date are required');
+    }
 
     // Create log entry
     const { data: logEntry } = await supabaseClient
@@ -294,48 +200,23 @@ serve(async (req) => {
       .select()
       .single();
 
-    console.log('Starting Wikidata death query process...');
+    console.log(`Starting Wikidata death query for ${startDate} to ${endDate}...`);
     
-    // Query for deaths in the last 30 days
-    const today = new Date();
-    const dates = [];
+    // Query Wikidata with the specified date range
+    const deaths = await queryWikidataDeaths(startDate, endDate);
     
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      dates.push(date.toISOString().split('T')[0]);
-    }
-    
-    let allDeaths: WikidataDeath[] = [];
-    
-    // Query each date (with small delays to be polite)
-    for (const date of dates) {
-      const deaths = await queryWikidataDeaths(date);
-      allDeaths = allDeaths.concat(deaths);
-      
-      // Small delay between queries
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    // Remove duplicates
-    const uniqueDeaths = allDeaths.filter((death, index, self) => 
-      index === self.findIndex(d => 
-        d.name === death.name && d.dateOfDeath === death.dateOfDeath
-      )
-    );
-    
-    console.log(`Found ${uniqueDeaths.length} unique deaths from Wikidata`);
+    console.log(`Found ${deaths.length} deaths from Wikidata`);
     
     // Update log with deaths found
     await supabaseClient
       .from('fetch_logs')
       .update({
-        deaths_found: uniqueDeaths.length
+        deaths_found: deaths.length
       })
       .eq('id', logEntry.id);
     
     // Process and store deaths
-    const { deathsAdded, picksScored } = await processDeaths(supabaseClient, uniqueDeaths, logEntry.id);
+    const { deathsAdded, picksScored } = await processDeaths(supabaseClient, deaths, logEntry.id);
     
     // Complete the log
     await supabaseClient
@@ -349,11 +230,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        totalDeaths: uniqueDeaths.length,
+        totalDeaths: deaths.length,
         deathsAdded,
         picksScored,
         source: 'Wikidata',
-        message: 'Celebrity deaths queried successfully from Wikidata' 
+        message: `Celebrity deaths queried successfully from Wikidata for ${startDate} to ${endDate}` 
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
