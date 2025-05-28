@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Calendar, Database, Globe, CheckCircle, XCircle, RefreshCw, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -286,6 +287,7 @@ export default function AdminPage() {
                 <option value={30}>30 days</option>
               </select>
             </div>
+          </div>
 
           {/* Data Source Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -458,4 +460,3 @@ export default function AdminPage() {
     </div>
   );
 }
-          </div
