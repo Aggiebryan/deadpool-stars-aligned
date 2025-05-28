@@ -4,6 +4,14 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
+server: {
+  proxy: {
+    '/api': {
+      target: 'http://localhost:3001',
+      changeOrigin: true,
+    },
+  },
+},
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
