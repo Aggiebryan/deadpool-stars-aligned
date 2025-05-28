@@ -1,0 +1,31 @@
+{
+  "name": "deadpool-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Deadpool Contest 2025 - Celebrity death data scrapers",
+  "main": "scrapers.js",
+  "scripts": {
+    "start": "node scrapers.js",
+    "dev": "nodemon scrapers.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "cheerio": "^1.0.0-rc.12",
+    "axios": "^1.6.2",
+    "date-fns": "^3.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "deadpool",
+    "celebrity",
+    "scraper",
+    "wikipedia",
+    "wikidata",
+    "incendar"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
