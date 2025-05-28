@@ -39,6 +39,7 @@ const App: React.FC = () => {
         <BrowserRouter>
           <AuthProvider>
             <Routes>
+              <Route path="/admin" element={<AdminPage />} />
               <Route path="/" element={<Index />} />
               <Route path="/rules" element={<Rules />} />
               <Route path="/login" element={<Login />} />
