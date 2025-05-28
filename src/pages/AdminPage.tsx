@@ -1,8 +1,7 @@
-
 import { useState } from 'react';
 import { Calendar, Database, Globe, CheckCircle, XCircle, RefreshCw, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CelebrityDeath {
   name: string;
