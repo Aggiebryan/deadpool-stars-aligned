@@ -1,6 +1,7 @@
+
 import { useState } from 'react';
 import { Calendar, Database, Globe, CheckCircle, XCircle, RefreshCw, Download } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface CelebrityDeath {
@@ -157,9 +158,16 @@ export default function AdminPage() {
       setPendingDeaths(prev => [...prev, ...uniqueNewDeaths]);
       setActiveTab('approve');
       
-      toast.success(`Found ${uniqueNewDeaths.length} new deaths from ${source}`);
+      toast({
+        title: "Success",
+        description: `Found ${uniqueNewDeaths.length} new deaths from ${source}`,
+      });
     } catch (error) {
-      toast.error(`Failed to query ${source}. Please try again.`);
+      toast({
+        title: "Error",
+        description: `Failed to query ${source}. Please try again.`,
+        variant: "destructive",
+      });
       console.error('Error querying data:', error);
     } finally {
       setIsLoading(false);
@@ -184,19 +192,26 @@ export default function AdminPage() {
     const approvedDeaths = pendingDeaths.filter(d => d.approved);
     
     if (approvedDeaths.length === 0) {
-      toast.error('No deaths approved for submission');
+      toast({
+        title: "Error",
+        description: "No deaths approved for submission",
+        variant: "destructive",
+      });
       return;
     }
 
     try {
-      // Insert approved deaths into Supabase
+      // Insert approved deaths into the correct Supabase table
       const { error } = await supabase
-        .from('celebrity_deaths')
+        .from('deceased_celebrities')
         .insert(
           approvedDeaths.map(death => ({
-            celebrity_name: death.name,
-            date_of_death: new Date(death.dateOfDeath).toISOString(),
-            cause_of_death: death.causeOfDeath || 'Unknown',
+            canonical_name: death.name,
+            date_of_death: death.dateOfDeath,
+            age_at_death: death.age || 0,
+            cause_of_death_category: 'Unknown',
+            cause_of_death_details: death.causeOfDeath || 'Unknown',
+            game_year: 2025,
           }))
         );
 
@@ -205,9 +220,16 @@ export default function AdminPage() {
       // Remove approved deaths from pending list
       setPendingDeaths(prev => prev.filter(d => !d.approved));
       
-      toast.success(`Successfully added ${approvedDeaths.length} celebrity deaths`);
-    } catch (error) {
-      toast.error('Failed to submit approved deaths');
+      toast({
+        title: "Success",
+        description: `Successfully added ${approvedDeaths.length} celebrity deaths`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to submit approved deaths",
+        variant: "destructive",
+      });
       console.error('Error submitting deaths:', error);
     }
   };
