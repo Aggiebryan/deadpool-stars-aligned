@@ -1,4 +1,3 @@
-
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, User, Trophy, Target } from "lucide-react";
 import { RecentDeaths } from "@/components/dashboard/RecentDeaths";
-
 interface Pick {
   id: string;
   celebrity_name: string;
@@ -16,44 +14,38 @@ interface Pick {
   points_awarded: number;
   created_at: string;
 }
-
 const PlayerDetails = () => {
-  const { playerId } = useParams();
+  const {
+    playerId
+  } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const username = location.state?.username || "Player";
-
-  const { data: picks = [], isLoading } = useQuery({
+  const {
+    data: picks = [],
+    isLoading
+  } = useQuery({
     queryKey: ['player-picks', playerId],
     queryFn: async () => {
       if (!playerId) return [];
-      
-      const { data, error } = await supabase
-        .from('celebrity_picks')
-        .select('*')
-        .eq('user_id', playerId)
-        .eq('game_year', 2025)
-        .order('created_at', { ascending: false });
-      
+      const {
+        data,
+        error
+      } = await supabase.from('celebrity_picks').select('*').eq('user_id', playerId).eq('game_year', 2025).order('created_at', {
+        ascending: false
+      });
       if (error) throw error;
       return data as Pick[];
     },
     enabled: !!playerId
   });
-
   const totalScore = picks.reduce((sum, pick) => sum + (pick.points_awarded || 0), 0);
   const hits = picks.filter(pick => pick.is_hit).length;
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+  return <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4 mb-8">
-            <Button
-              onClick={() => navigate(-1)}
-              variant="outline"
-              className="border-purple-800/30 text-white hover:bg-purple-800/20"
-            >
+            <Button onClick={() => navigate(-1)} variant="outline" className="border-purple-800/30 text-gray-700 bg-zinc-200 hover:bg-zinc-100">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
@@ -106,12 +98,7 @@ const PlayerDetails = () => {
               <CardTitle className="text-white">Celebrity Picks for 2025</CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="text-center py-8 text-gray-400">Loading picks...</div>
-              ) : picks.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">No picks found</div>
-              ) : (
-                <Table>
+              {isLoading ? <div className="text-center py-8 text-gray-400">Loading picks...</div> : picks.length === 0 ? <div className="text-center py-8 text-gray-400">No picks found</div> : <Table>
                   <TableHeader>
                     <TableRow className="border-purple-800/30">
                       <TableHead className="text-purple-300">Celebrity</TableHead>
@@ -121,8 +108,7 @@ const PlayerDetails = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {picks.map((pick) => (
-                      <TableRow key={pick.id} className="border-purple-800/30 hover:bg-purple-800/10">
+                    {picks.map(pick => <TableRow key={pick.id} className="border-purple-800/30 hover:bg-purple-800/10">
                         <TableCell className="text-white font-semibold">
                           {pick.celebrity_name}
                         </TableCell>
@@ -137,19 +123,15 @@ const PlayerDetails = () => {
                         <TableCell className="text-gray-300">
                           {new Date(pick.created_at).toLocaleDateString()}
                         </TableCell>
-                      </TableRow>
-                    ))}
+                      </TableRow>)}
                   </TableBody>
-                </Table>
-              )}
+                </Table>}
             </CardContent>
           </Card>
 
           <RecentDeaths />
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default PlayerDetails;
