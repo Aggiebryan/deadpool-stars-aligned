@@ -1,19 +1,24 @@
-
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Skull, ArrowLeft, RefreshCw } from "lucide-react";
+import { Skull, ArrowLeft, RefreshCw, Smile } from "lucide-react";
 import { useDeceasedCelebrities, useFetchCelebrityDeaths, SupabaseDeceasedCelebrity } from "@/hooks/useSupabase";
 import { calculateScore } from "@/utils/gameLogic";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
+interface DeceasedCelebrityWithDescription extends SupabaseDeceasedCelebrity {
+  celebrity_description?: string;
+}
 
 const DeceasedList = () => {
-  const [selectedDeceased, setSelectedDeceased] = useState<SupabaseDeceasedCelebrity | null>(null);
+  const [selectedDeceased, setSelectedDeceased] = useState<DeceasedCelebrityWithDescription | null>(null);
   const { data: deceasedCelebrities = [], isLoading, error } = useDeceasedCelebrities(2025);
   const fetchDeathsMutation = useFetchCelebrityDeaths();
+  const [isLookingUp, setIsLookingUp] = useState(false);
 
   const getCauseColor = (cause: string) => {
     switch (cause) {
@@ -28,7 +33,7 @@ const DeceasedList = () => {
     }
   };
 
-  const calculatePoints = (deceased: SupabaseDeceasedCelebrity) => {
+  const calculatePoints = (deceased: DeceasedCelebrityWithDescription) => {
     const scoreBreakdown = calculateScore({
       ...deceased,
       id: deceased.id,
@@ -67,6 +72,32 @@ const DeceasedList = () => {
     }
   };
 
+  const handleLookupWikipedia = async () => {
+    setIsLookingUp(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('lookup-celebrity-wikipedia');
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Wikipedia lookup completed",
+        description: `Processed ${data.celebritiesProcessed} celebrities, updated ${data.dataUpdated} records`,
+      });
+      
+      // Refresh the data
+      window.location.reload();
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to lookup celebrities on Wikipedia",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -88,6 +119,15 @@ const DeceasedList = () => {
             <h1 className="text-2xl font-bold text-white">DeadPool 2025</h1>
           </Link>
           <div className="flex items-center space-x-4">
+            <Button 
+              onClick={handleLookupWikipedia}
+              disabled={isLookingUp}
+              variant="outline" 
+              className="border-blue-400 text-blue-400 hover:bg-blue-400 hover:text-white"
+            >
+              <Smile className={`h-4 w-4 mr-2 ${isLookingUp ? 'animate-spin' : ''}`} />
+              {isLookingUp ? "Looking up..." : "Get Wikipedia Bios"}
+            </Button>
             <Button 
               onClick={handleRefreshDeaths}
               disabled={fetchDeathsMutation.isPending}
@@ -154,13 +194,18 @@ const DeceasedList = () => {
                                   ? 'bg-purple-900/40'
                                   : 'hover:bg-black/40'
                               }`}
-                              onClick={() => setSelectedDeceased(deceased)}
+                              onClick={() => setSelectedDeceased(deceased as DeceasedCelebrityWithDescription)}
                             >
                               <TableCell className="text-white">
                                 {new Date(deceased.date_of_death).toLocaleDateString()}
                               </TableCell>
                               <TableCell className="text-white font-medium">
-                                {deceased.canonical_name}
+                                <div className="flex items-center gap-2">
+                                  {deceased.canonical_name}
+                                  {(deceased as DeceasedCelebrityWithDescription).celebrity_description && (
+                                    <Smile className="h-4 w-4 text-yellow-400" title="Has funny bio" />
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell>
                                 <Badge className={getCauseColor(deceased.cause_of_death_category)}>
@@ -171,7 +216,7 @@ const DeceasedList = () => {
                                 {deceased.age_at_death}
                               </TableCell>
                               <TableCell className="text-green-400 font-bold">
-                                {calculatePoints(deceased)}
+                                {calculatePoints(deceased as DeceasedCelebrityWithDescription)}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -228,6 +273,21 @@ const DeceasedList = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Funny Biography */}
+                      {selectedDeceased.celebrity_description && (
+                        <div>
+                          <h4 className="text-white font-semibold mb-2 flex items-center gap-2">
+                            <Smile className="h-4 w-4 text-yellow-400" />
+                            Celebrity Bio
+                          </h4>
+                          <div className="bg-purple-900/20 p-3 rounded-lg border border-purple-600/30">
+                            <p className="text-gray-200 text-sm italic">
+                              {selectedDeceased.celebrity_description}
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Special Circumstances */}
                       {(selectedDeceased.died_on_birthday || selectedDeceased.died_on_major_holiday || 
