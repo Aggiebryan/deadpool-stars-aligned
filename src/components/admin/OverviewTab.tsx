@@ -1,8 +1,5 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { RefreshCw, Users, Skull, Trophy } from "lucide-react";
-import { UseMutationResult } from "@tanstack/react-query";
+import { Users, Skull, Trophy } from "lucide-react";
 import { IncendarScrapeButton } from "./IncendarScrapeButton";
 import { WikipediaScrapeButton } from "./WikipediaScrapeButton";
 import { WikidataScrapeButton } from "./WikidataScrapeButton";
@@ -11,10 +8,9 @@ interface OverviewTabProps {
   usersCount: number;
   deceasedCelebritiesCount: number;
   totalHits: number;
-  fetchDeathsMutation: UseMutationResult<any, Error, void, unknown>;
 }
 
-export const OverviewTab = ({ usersCount, deceasedCelebritiesCount, totalHits, fetchDeathsMutation }: OverviewTabProps) => {
+export const OverviewTab = ({ usersCount, deceasedCelebritiesCount, totalHits }: OverviewTabProps) => {
   return (
     <div className="space-y-6">
       <div className="grid md:grid-cols-3 gap-6">
@@ -65,15 +61,6 @@ export const OverviewTab = ({ usersCount, deceasedCelebritiesCount, totalHits, f
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col space-y-3">
-              <Button
-                onClick={() => fetchDeathsMutation.mutate()}
-                disabled={fetchDeathsMutation.isPending}
-                className="bg-purple-600 hover:bg-purple-700"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {fetchDeathsMutation.isPending ? "Fetching..." : "Fetch from RSS Feeds"}
-              </Button>
-              
               <IncendarScrapeButton />
               <WikipediaScrapeButton />
               <WikidataScrapeButton />
@@ -91,7 +78,7 @@ export const OverviewTab = ({ usersCount, deceasedCelebritiesCount, totalHits, f
           <CardContent>
             <div className="text-gray-300">
               <p>• Review and approve new celebrity deaths</p>
-              <p>• Monitor RSS feed performance</p>
+              <p>• Monitor data source performance</p>
               <p>• Check system logs for errors</p>
               <p>• Update scoring rules as needed</p>
             </div>
