@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -89,33 +88,6 @@ export const useAdminData = () => {
   });
 
   // Mutations
-  const fetchDeathsMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('fetch-celebrity-deaths');
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      toast({
-        title: "Death fetch started",
-        description: "Celebrity deaths are being fetched and processed.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities-admin'] });
-      queryClient.invalidateQueries({ queryKey: ['deceased-celebrities'] });
-      queryClient.invalidateQueries({ queryKey: ['recent-deaths'] });
-      queryClient.invalidateQueries({ queryKey: ['fetch-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['celebrity-picks'] });
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fetch deaths",
-        variant: "destructive",
-      });
-    }
-  });
-
   const addFeedMutation = useMutation({
     mutationFn: async (feed: { name: string; url: string }) => {
       const { data, error } = await (supabase as any)
@@ -158,7 +130,6 @@ export const useAdminData = () => {
     picks,
     rssFeeds,
     fetchLogs,
-    fetchDeathsMutation,
     addFeedMutation,
     toggleFeedMutation,
     queryClient
