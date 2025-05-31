@@ -1,7 +1,6 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Database, Loader2 } from "lucide-react";
+import { Database, Loader2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -11,19 +10,19 @@ export const WikipediaScrapeButton = () => {
   const handleScrape = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('scrape-wikipedia-deaths');
+      const { data, error } = await supabase.functions.invoke('lookup-celebrity-wikipedia');
       
       if (error) throw error;
       
       toast({
-        title: "Wikipedia scrape completed",
-        description: `Found ${data.totalDeaths} deaths, added ${data.deathsAdded} new records`,
+        title: "Wikipedia celebrity lookup completed",
+        description: `Processed ${data.celebritiesProcessed} celebrities, updated ${data.dataUpdated} records with biographical data`,
       });
     } catch (error: any) {
-      console.error('Error scraping Wikipedia:', error);
+      console.error('Error looking up celebrities on Wikipedia:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to scrape Wikipedia",
+        description: error.message || "Failed to lookup celebrities on Wikipedia",
         variant: "destructive",
       });
     } finally {
@@ -40,9 +39,9 @@ export const WikipediaScrapeButton = () => {
       {isLoading ? (
         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
       ) : (
-        <Database className="h-4 w-4 mr-2" />
+        <Users className="h-4 w-4 mr-2" />
       )}
-      {isLoading ? "Scraping Wikipedia..." : "Scrape Wikipedia Deaths"}
+      {isLoading ? "Looking up celebrities..." : "Lookup Celebrity Picks on Wikipedia"}
     </Button>
   );
 };
