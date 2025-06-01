@@ -203,7 +203,7 @@ const DeceasedList = () => {
                                 <div className="flex items-center gap-2">
                                   {deceased.canonical_name}
                                   {(deceased as DeceasedCelebrityWithDescription).celebrity_description && (
-                                    <Smile className="h-4 w-4 text-yellow-400" title="Has funny bio" />
+                                    <Smile className="h-4 w-4 text-yellow-400" />
                                   )}
                                 </div>
                               </TableCell>

@@ -50,6 +50,7 @@ export type Database = {
           canonical_name: string
           cause_of_death_category: string | null
           cause_of_death_details: string | null
+          celebrity_description: string | null
           created_at: string | null
           date_of_birth: string | null
           date_of_death: string
@@ -73,6 +74,7 @@ export type Database = {
           canonical_name: string
           cause_of_death_category?: string | null
           cause_of_death_details?: string | null
+          celebrity_description?: string | null
           created_at?: string | null
           date_of_birth?: string | null
           date_of_death: string
@@ -96,6 +98,7 @@ export type Database = {
           canonical_name?: string
           cause_of_death_category?: string | null
           cause_of_death_details?: string | null
+          celebrity_description?: string | null
           created_at?: string | null
           date_of_birth?: string | null
           date_of_death?: string
