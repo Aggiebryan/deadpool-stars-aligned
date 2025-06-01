@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,6 +10,7 @@ import { RSSFeedsTab } from "@/components/admin/RSSFeedsTab";
 import { MonitoringTab } from "@/components/admin/MonitoringTab";
 import { AddDeathTab } from "@/components/admin/AddDeathTab";
 import { ManageDeathsTab } from "@/components/admin/ManageDeathsTab";
+import { WikipediaLookupManager } from "@/components/admin/WikipediaLookupManager";
 
 const AdminDashboard = () => {
   const { user, profile } = useAuth();
@@ -70,6 +72,11 @@ const AdminDashboard = () => {
           {activeTab === 'manageDeath' && (
             <ManageDeathsTab deceasedCelebrities={deceasedCelebrities} />
           )}
+
+          {/* Add Wikipedia Lookup Manager as a new section */}
+          <div className="mt-8">
+            <WikipediaLookupManager />
+          </div>
         </div>
       </div>
     </div>

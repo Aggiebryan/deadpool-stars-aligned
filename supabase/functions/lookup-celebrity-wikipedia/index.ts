@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -436,18 +437,42 @@ function calculatePoints(deceased: any): number {
 }
 
 serve(async (req) => {
+  console.log('Edge function called with method:', req.method);
+  
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request');
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    console.log('Processing request...');
+    
+    // Parse request body
+    let requestBody = {};
+    try {
+      requestBody = await req.json();
+      console.log('Request body:', requestBody);
+    } catch (e) {
+      console.log('No request body or invalid JSON');
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    console.log('Environment check:', {
+      hasUrl: !!supabaseUrl,
+      hasServiceKey: !!supabaseServiceKey
+    });
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing required environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    }
+
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // Create log entry
-    const { data: logEntry } = await supabaseClient
+    console.log('Creating log entry...');
+    const { data: logEntry, error: logError } = await supabaseClient
       .from('fetch_logs')
       .insert({
         status: 'running',
@@ -458,10 +483,18 @@ serve(async (req) => {
       .select()
       .single();
 
+    if (logError) {
+      console.error('Error creating log entry:', logError);
+      throw logError;
+    }
+
+    console.log('Log entry created:', logEntry.id);
     console.log('Starting Wikipedia celebrity lookup process...');
     
     // Process celebrity picks and lookup missing data
     const { celebritiesProcessed, dataUpdated } = await processCelebrityPicks(supabaseClient, logEntry.id);
+    
+    console.log(`Processed ${celebritiesProcessed} celebrities, updated ${dataUpdated} records`);
     
     // Complete the log
     await supabaseClient
@@ -471,6 +504,8 @@ serve(async (req) => {
         completed_at: new Date().toISOString()
       })
       .eq('id', logEntry.id);
+    
+    console.log('Wikipedia lookup completed successfully');
     
     return new Response(
       JSON.stringify({ 
@@ -489,24 +524,31 @@ serve(async (req) => {
     console.error('Error in Wikipedia celebrity lookup function:', error);
     
     // Update log with error
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-    
-    await supabaseClient
-      .from('fetch_logs')
-      .update({
-        status: 'failed',
-        completed_at: new Date().toISOString(),
-        error_message: error.message
-      })
-      .eq('status', 'running')
-      .order('started_at', { ascending: false })
-      .limit(1);
+    try {
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
+      
+      await supabaseClient
+        .from('fetch_logs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: error.message
+        })
+        .eq('status', 'running')
+        .order('started_at', { ascending: false })
+        .limit(1);
+    } catch (logUpdateError) {
+      console.error('Error updating log:', logUpdateError);
+    }
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Check the function logs for more information'
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

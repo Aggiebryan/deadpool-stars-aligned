@@ -66,7 +66,7 @@ export const WikipediaLookupManager = () => {
       
       if (error) {
         console.error('Function error:', error);
-        throw error;
+        throw new Error(error.message || 'Unknown error occurred');
       }
       
       toast({
@@ -79,9 +79,19 @@ export const WikipediaLookupManager = () => {
       
     } catch (error: any) {
       console.error('Error in handleManualLookup:', error);
+      
+      let errorMessage = "Failed to lookup celebrities on Wikipedia";
+      
+      // Try to extract more specific error information
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to lookup celebrities on Wikipedia",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
