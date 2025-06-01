@@ -12,7 +12,7 @@ export const WikipediaLookupManager = () => {
   const [isLookingUp, setIsLookingUp] = useState(false);
 
   // Get stats about celebrity descriptions
-  const { data: descriptionStats } = useQuery({
+  const { data: descriptionStats, refetch: refetchStats } = useQuery({
     queryKey: ['wikipedia-description-stats'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -56,9 +56,18 @@ export const WikipediaLookupManager = () => {
   const handleManualLookup = async () => {
     setIsLookingUp(true);
     try {
-      const { data, error } = await supabase.functions.invoke('lookup-celebrity-wikipedia');
+      console.log('Starting Wikipedia lookup...');
       
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('lookup-celebrity-wikipedia', {
+        body: { manual: true }
+      });
+      
+      console.log('Function response:', { data, error });
+      
+      if (error) {
+        console.error('Function error:', error);
+        throw error;
+      }
       
       toast({
         title: "Wikipedia lookup completed",
@@ -66,9 +75,10 @@ export const WikipediaLookupManager = () => {
       });
       
       // Refresh stats
-      window.location.reload();
+      refetchStats();
       
     } catch (error: any) {
+      console.error('Error in handleManualLookup:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to lookup celebrities on Wikipedia",

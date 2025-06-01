@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Database, Loader2, Users } from "lucide-react";
@@ -10,9 +11,18 @@ export const WikipediaScrapeButton = () => {
   const handleScrape = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('lookup-celebrity-wikipedia');
+      console.log('Starting Wikipedia lookup...');
       
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('lookup-celebrity-wikipedia', {
+        body: { manual: true }
+      });
+      
+      console.log('Function response:', { data, error });
+      
+      if (error) {
+        console.error('Function error:', error);
+        throw error;
+      }
       
       toast({
         title: "Wikipedia celebrity lookup completed",
