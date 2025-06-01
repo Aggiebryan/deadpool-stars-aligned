@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -19,100 +18,240 @@ interface CelebrityInfo {
 
 async function searchWikipedia(celebrityName: string): Promise<CelebrityInfo | null> {
   try {
-    console.log(`Searching Wikipedia for: ${celebrityName}`);
+    console.log(`🔍 Starting Wikipedia search for: "${celebrityName}"`);
     
-    // First, search for the page
-    const searchUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(celebrityName)}`;
+    // Clean the name for searching
+    const cleanName = celebrityName
+      .replace(/["']/g, '') // Remove quotes
+      .replace(/\s+/g, ' ') // Normalize spaces
+      .trim();
     
-    let response = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'DeadpoolGameBot/1.0 (Celebrity Lookup)'
-      }
-    });
+    console.log(`🧹 Cleaned name: "${cleanName}"`);
     
-    if (!response.ok) {
-      // Try alternative search if direct lookup fails
-      const searchApiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(celebrityName)}&limit=1&namespace=0&format=json`;
-      const searchResponse = await fetch(searchApiUrl);
-      const searchData = await searchResponse.json();
+    // Create comprehensive search variations for wrestlers/performers
+    const searchVariations = [];
+    
+    // Original name variations
+    searchVariations.push(cleanName);
+    searchVariations.push(cleanName.replace(/\([^)]*\)/g, '').trim()); // Remove parentheses
+    searchVariations.push(cleanName.split(' ').slice(0, 2).join(' ')); // First two words
+    searchVariations.push(cleanName.replace(/\b(Jr|Sr|III|II)\b/gi, '').trim()); // Remove suffixes
+    
+    // Extract nickname/stage name variations
+    const nicknameMatch = celebrityName.match(/["']([^"']+)["']/);
+    if (nicknameMatch) {
+      const nickname = nicknameMatch[1];
+      searchVariations.push(nickname); // Just the nickname
+      searchVariations.push(`${nickname} (wrestler)`); // Nickname + wrestler
+      searchVariations.push(`${nickname} (actor)`); // Nickname + actor
+      searchVariations.push(`${nickname} (comedian)`); // Nickname + comedian
+      searchVariations.push(`${nickname} (performer)`); // Nickname + performer
       
-      if (searchData[1] && searchData[1].length > 0) {
-        const foundTitle = searchData[1][0];
-        response = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(foundTitle)}`);
-      }
-      
-      if (!response.ok) {
-        console.log(`Could not find Wikipedia page for ${celebrityName}`);
-        return null;
-      }
+      // Also try without quotes in the original
+      const nameWithoutQuotes = cleanName.replace(/["']([^"']+)["']/g, '$1');
+      searchVariations.push(nameWithoutQuotes);
     }
     
-    const summaryData = await response.json();
-    console.log(`Found Wikipedia page: ${summaryData.title}`);
+    // Wrestling-specific variations
+    if (cleanName.toLowerCase().includes('black bart')) {
+      searchVariations.push('Black Bart (wrestler)');
+      searchVariations.push('Black Bart');
+      searchVariations.push('Rick Harris wrestler');
+      searchVariations.push('Ricky Harris wrestler');
+    }
+    
+    // Add profession-specific searches for common name patterns
+    const baseName = cleanName.replace(/["']([^"']+)["']/g, '').trim();
+    searchVariations.push(`${baseName} (wrestler)`);
+    searchVariations.push(`${baseName} (actor)`);
+    searchVariations.push(`${baseName} (comedian)`);
+    
+    // Remove duplicates and empty entries
+    const uniqueVariations = [...new Set(searchVariations)].filter(v => v && v.length > 1);
+    
+    console.log(`🔄 Search variations:`, uniqueVariations);
+    
+    for (const variation of uniqueVariations) {
+      console.log(`🎯 Trying search variation: "${variation}"`);
+      
+      try {
+        // First, try direct page lookup
+        const directUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(variation)}`;
+        console.log(`📄 Direct lookup URL: ${directUrl}`);
+        
+        let response = await fetch(directUrl, {
+          headers: {
+            'User-Agent': 'DeadpoolGameBot/1.0 (Celebrity Lookup)'
+          }
+        });
+        
+        console.log(`📄 Direct lookup response: ${response.status}`);
+        
+        if (response.ok) {
+          const summaryData = await response.json();
+          console.log(`✅ Found via direct lookup: "${summaryData.title}"`);
+          
+          // Get full content and process
+          const result = await processWikipediaPage(celebrityName, summaryData);
+          if (result) return result;
+        }
+        
+        // Try search API if direct lookup fails
+        console.log(`🔍 Direct lookup failed, trying search API...`);
+        const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(variation)}&limit=10&namespace=0&format=json`;
+        console.log(`🔍 Search URL: ${searchUrl}`);
+        
+        const searchResponse = await fetch(searchUrl);
+        const searchData = await searchResponse.json();
+        
+        console.log(`🔍 Search results for "${variation}":`, searchData[1]);
+        
+        if (searchData[1] && searchData[1].length > 0) {
+          // Try each search result
+          for (const foundTitle of searchData[1]) {
+            console.log(`✅ Trying search result: "${foundTitle}"`);
+            
+            try {
+              const pageResponse = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(foundTitle)}`);
+              if (pageResponse.ok) {
+                const pageData = await pageResponse.json();
+                const result = await processWikipediaPage(celebrityName, pageData);
+                if (result) return result;
+              }
+            } catch (pageError) {
+              console.log(`❌ Error processing search result "${foundTitle}":`, pageError);
+              continue;
+            }
+          }
+        } else {
+          console.log(`❌ No search results for "${variation}"`);
+        }
+        
+      } catch (variationError) {
+        console.error(`❌ Error trying variation "${variation}":`, variationError);
+        continue;
+      }
+      
+      // Small delay between searches to be polite
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    console.log(`❌ Could not find Wikipedia page for "${celebrityName}" after trying all variations`);
+    return null;
+    
+  } catch (error) {
+    console.error(`💥 Fatal error searching Wikipedia for "${celebrityName}":`, error);
+    return null;
+  }
+}
+
+async function processWikipediaPage(originalName: string, summaryData: any): Promise<CelebrityInfo | null> {
+  try {
+    console.log(`📖 Processing Wikipedia page: "${summaryData.title}"`);
+    console.log(`📝 Extract preview: ${summaryData.extract?.substring(0, 100)}...`);
     
     // Get full page content for detailed extraction
     const contentUrl = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(summaryData.title)}&format=json&prop=text&section=0`;
+    console.log(`📖 Getting full content from: ${contentUrl}`);
+    
     const contentResponse = await fetch(contentUrl);
     const contentData = await contentResponse.json();
     
     if (!contentData.parse || !contentData.parse.text) {
-      console.log(`Could not get content for ${summaryData.title}`);
+      console.log(`❌ Could not get content for "${summaryData.title}"`);
       return null;
     }
     
-    const htmlContent = contentData.parse.text['*'];
-    const info = extractCelebrityInfo(celebrityName, htmlContent, summaryData);
+    console.log(`📖 Got page content, length: ${contentData.parse.text['*'].length}`);
     
-    return {
-      ...info,
-      wikipediaUrl: `https://en.wikipedia.org/wiki/${encodeURIComponent(summaryData.title)}`
-    };
+    const htmlContent = contentData.parse.text['*'];
+    
+    // Check if this looks like a death-related page for 2025
+    const textContent = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // Look for recent death indicators
+    const deathIndicators = [
+      /died.*(january|february|march|april|may|june|july|august|september|october|november|december).*(2025|2024)/i,
+      /(january|february|march|april|may|june|july|august|september|october|november|december).*(2025|2024).*died/i,
+      /death.*(january|february|march|april|may|june|july|august|september|october|november|december).*(2025|2024)/i,
+      /(2025|2024).*(died|death)/i
+    ];
+    
+    const hasRecentDeath = deathIndicators.some(pattern => pattern.test(textContent));
+    console.log(`💀 Recent death indicators found: ${hasRecentDeath}`);
+    
+    const info = extractCelebrityInfo(originalName, htmlContent, summaryData);
+    
+    // If we found death info or this is clearly the right person, return it
+    if (info.dateOfDeath || info.dateOfBirth || hasRecentDeath) {
+      console.log(`🎭 Extracted useful info for ${originalName}`);
+      return {
+        ...info,
+        wikipediaUrl: `https://en.wikipedia.org/wiki/${encodeURIComponent(summaryData.title)}`
+      };
+    }
+    
+    console.log(`❌ No useful biographical data found for ${originalName} on page ${summaryData.title}`);
+    return null;
     
   } catch (error) {
-    console.error(`Error searching Wikipedia for ${celebrityName}:`, error);
+    console.error(`💥 Error processing Wikipedia page:`, error);
     return null;
   }
 }
 
 function extractCelebrityInfo(name: string, htmlContent: string, summaryData: any): CelebrityInfo {
+  console.log(`🔬 Extracting info for: ${name}`);
+  
   // Remove HTML tags for text processing
   const textContent = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  console.log(`📄 Text content length: ${textContent.length}`);
+  console.log(`📄 First 300 chars: ${textContent.substring(0, 300)}`);
   
   let dateOfBirth: string | undefined;
   let dateOfDeath: string | undefined;
   let ageAtDeath: number | undefined;
   let causeOfDeath: string | undefined;
   
-  // Extract birth date - various patterns
+  // Enhanced birth date patterns
   const birthPatterns = [
     /born[:\s]+(\w+\s+\d{1,2},?\s+\d{4})/i,
     /born[:\s]+(\d{1,2}\s+\w+\s+\d{4})/i,
     /born[:\s]+(\d{4})/i,
     /\(born\s+(\w+\s+\d{1,2},?\s+\d{4})\)/i,
-    /\((\w+\s+\d{1,2},?\s+\d{4})\s*[–\-]\s*/i
+    /\((\w+\s+\d{1,2},?\s+\d{4})\s*[–\-]\s*/i,
+    /\b(\w+\s+\d{1,2},?\s+\d{4})\s*[–\-]/i,
+    /birth.*?(\w+\s+\d{1,2},?\s+\d{4})/i
   ];
   
   for (const pattern of birthPatterns) {
     const match = textContent.match(pattern);
     if (match) {
       dateOfBirth = standardizeDate(match[1]);
+      console.log(`🎂 Found birth date: ${match[1]} → ${dateOfBirth}`);
       break;
     }
   }
   
-  // Extract death date - various patterns
+  // Enhanced death date patterns - especially for 2025 deaths
   const deathPatterns = [
     /died[:\s]+(\w+\s+\d{1,2},?\s+\d{4})/i,
     /died[:\s]+(\d{1,2}\s+\w+\s+\d{4})/i,
+    /(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+2025/i,
     /\–\s*(\w+\s+\d{1,2},?\s+\d{4})\)/i,
     /\-\s*(\w+\s+\d{1,2},?\s+\d{4})\)/i,
-    /death[:\s]+(\w+\s+\d{1,2},?\s+\d{4})/i
+    /death[:\s]+(\w+\s+\d{1,2},?\s+\d{4})/i,
+    /\s+[–\-]\s*(\w+\s+\d{1,2},?\s+\d{4})\)/i,
+    /passed away.*?(\w+\s+\d{1,2},?\s+\d{4})/i,
+    /(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+(2024|2025)/i
   ];
   
   for (const pattern of deathPatterns) {
     const match = textContent.match(pattern);
     if (match) {
-      dateOfDeath = standardizeDate(match[1]);
+      const dateStr = match[1] || match[0];
+      dateOfDeath = standardizeDate(dateStr);
+      console.log(`💀 Found death date: ${dateStr} → ${dateOfDeath}`);
       break;
     }
   }
@@ -126,27 +265,32 @@ function extractCelebrityInfo(name: string, htmlContent: string, summaryData: an
         (death.getMonth() === birth.getMonth() && death.getDate() < birth.getDate())) {
       ageAtDeath--;
     }
+    console.log(`🎯 Calculated age at death: ${ageAtDeath}`);
   }
   
-  // Extract cause of death
+  // Enhanced cause of death patterns
   const causePatterns = [
     /died (?:of|from|due to)\s+([^.]{10,80})/i,
     /cause of death[:\s]+([^.]{10,80})/i,
     /death was (?:caused by|due to)\s+([^.]{10,80})/i,
     /died following\s+([^.]{10,80})/i,
-    /died after\s+([^.]{10,80})/i
+    /died after\s+([^.]{10,80})/i,
+    /passed away (?:from|due to)\s+([^.]{10,80})/i,
+    /succumbed to\s+([^.]{10,80})/i
   ];
   
   for (const pattern of causePatterns) {
     const match = textContent.match(pattern);
     if (match) {
       causeOfDeath = match[1].trim().replace(/\s+/g, ' ');
+      console.log(`⚰️ Found cause of death: ${causeOfDeath}`);
       break;
     }
   }
   
-  // Create funny description
-  const description = createFunnyDescription(name, summaryData.extract || textContent.substring(0, 500), dateOfDeath, causeOfDeath);
+  // Create funny description - enhanced for wrestlers
+  const description = createFunnyDescription(name, summaryData.extract || textContent.substring(0, 500), dateOfDeath, causeOfDeath, summaryData.title);
+  console.log(`😄 Created description: ${description.substring(0, 100)}...`);
   
   return {
     name,
@@ -158,42 +302,21 @@ function extractCelebrityInfo(name: string, htmlContent: string, summaryData: an
   };
 }
 
-function standardizeDate(dateStr: string): string {
-  try {
-    // Handle various date formats and convert to YYYY-MM-DD
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-      // Try to parse manually for formats like "January 15, 1990"
-      const monthNames = {
-        'january': '01', 'february': '02', 'march': '03', 'april': '04',
-        'may': '05', 'june': '06', 'july': '07', 'august': '08',
-        'september': '09', 'october': '10', 'november': '11', 'december': '12',
-        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
-        'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09',
-        'oct': '10', 'nov': '11', 'dec': '12'
-      };
-      
-      const parts = dateStr.toLowerCase().replace(/,/g, '').split(/\s+/);
-      if (parts.length >= 3) {
-        const month = monthNames[parts[0] as keyof typeof monthNames];
-        const day = parts[1].padStart(2, '0');
-        const year = parts[2];
-        if (month) {
-          return `${year}-${month}-${day}`;
-        }
-      }
-      return dateStr; // Return as-is if we can't parse it
-    }
-    return date.toISOString().split('T')[0];
-  } catch {
-    return dateStr;
-  }
-}
-
-function createFunnyDescription(name: string, extract: string, dateOfDeath?: string, causeOfDeath?: string): string {
+function createFunnyDescription(name: string, extract: string, dateOfDeath?: string, causeOfDeath?: string, wikipediaTitle?: string): string {
   const firstSentence = extract.split('.')[0] + '.';
   
-  const funnyIntros = [
+  // Check if this is a wrestler
+  const isWrestler = wikipediaTitle?.toLowerCase().includes('wrestler') || 
+                    extract.toLowerCase().includes('wrestler') || 
+                    extract.toLowerCase().includes('wrestling');
+  
+  const funnyIntros = isWrestler ? [
+    `Meet ${name}, who took their final bump`,
+    `${name} has been pinned for the three-count permanently`,
+    `Former grappler ${name}`,
+    `Wrestling legend ${name} has left the ring for good`,
+    `${name} has made their final entrance`
+  ] : [
     `Meet ${name}, who shuffled off this mortal coil`,
     `${name} has left the building permanently`,
     `Former person ${name}`,
@@ -201,7 +324,13 @@ function createFunnyDescription(name: string, extract: string, dateOfDeath?: str
     `Dearly departed ${name}`
   ];
   
-  const funnyOutros = [
+  const funnyOutros = isWrestler ? [
+    "and this time there's no getting back up.",
+    "proving that even the toughest wrestlers can't escape the ultimate submission hold.",
+    "in what we can only assume was not a work.",
+    "making their final exit through the curtain of life.",
+    "and unfortunately, there's no referee to stop this count."
+  ] : [
     "and probably didn't see it coming.",
     "because apparently life had other plans.",
     "proving that even celebrities can't cheat death.",
@@ -222,13 +351,58 @@ function createFunnyDescription(name: string, extract: string, dateOfDeath?: str
   description += ` ${funnyOutros[Math.floor(Math.random() * funnyOutros.length)]}`;
   
   // Add a brief bio line
-  const bioLine = firstSentence.replace(name, 'They were').replace(/^[^,]+,\s*/, 'They were ');
+  let bioLine = firstSentence.replace(name, 'They were').replace(/^[^,]+,\s*/, 'They were ');
+  if (isWrestler) {
+    bioLine = bioLine.replace('They were', 'They were a professional wrestler');
+  }
   description += ` ${bioLine}`;
   
   return description;
 }
 
+function standardizeDate(dateStr: string): string {
+  try {
+    console.log(`📅 Standardizing date: "${dateStr}"`);
+    
+    // Handle various date formats and convert to YYYY-MM-DD
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      // Try to parse manually for formats like "January 15, 1990"
+      const monthNames = {
+        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+        'september': '09', 'october': '10', 'november': '11', 'december': '12',
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+        'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09',
+        'oct': '10', 'nov': '11', 'dec': '12'
+      };
+      
+      const parts = dateStr.toLowerCase().replace(/,/g, '').split(/\s+/);
+      if (parts.length >= 3) {
+        const month = monthNames[parts[0] as keyof typeof monthNames];
+        const day = parts[1].padStart(2, '0');
+        const year = parts[2];
+        if (month) {
+          const standardized = `${year}-${month}-${day}`;
+          console.log(`📅 Manual parse: ${dateStr} → ${standardized}`);
+          return standardized;
+        }
+      }
+      console.log(`📅 Could not parse date: ${dateStr}`);
+      return dateStr; // Return as-is if we can't parse it
+    }
+    const standardized = date.toISOString().split('T')[0];
+    console.log(`📅 Standard parse: ${dateStr} → ${standardized}`);
+    return standardized;
+  } catch (error) {
+    console.log(`📅 Date parse error for "${dateStr}":`, error);
+    return dateStr;
+  }
+}
+
 async function processCelebrityPicks(supabase: any, logId: string) {
+  console.log(`🎬 Starting celebrity picks processing...`);
+  
   let celebritiesProcessed = 0;
   let dataUpdated = 0;
   
@@ -239,15 +413,20 @@ async function processCelebrityPicks(supabase: any, logId: string) {
     .eq('game_year', 2025);
   
   if (error) {
+    console.error(`💥 Failed to fetch celebrity picks:`, error);
     throw new Error(`Failed to fetch celebrity picks: ${error.message}`);
   }
   
+  console.log(`📋 Found ${picks?.length || 0} total picks`);
+  
   // Get unique names
   const uniqueNames = [...new Set(picks.map((pick: any) => pick.celebrity_name))];
-  console.log(`Found ${uniqueNames.length} unique celebrities to look up`);
+  console.log(`🌟 Found ${uniqueNames.length} unique celebrities:`);
+  uniqueNames.forEach((name, i) => console.log(`  ${i + 1}. ${name}`));
   
   for (const celebrityName of uniqueNames) {
     celebritiesProcessed++;
+    console.log(`\n🎭 Processing ${celebritiesProcessed}/${uniqueNames.length}: "${celebrityName}"`);
     
     try {
       // Check if we already have a deceased_celebrities record for this person
@@ -258,14 +437,16 @@ async function processCelebrityPicks(supabase: any, logId: string) {
         .single();
       
       if (existing) {
-        console.log(`${celebrityName} already exists in deceased_celebrities table`);
+        console.log(`✅ "${celebrityName}" already exists in deceased_celebrities table`);
         continue;
       }
       
-      console.log(`Looking up ${celebrityName} on Wikipedia...`);
+      console.log(`🔍 Looking up "${celebrityName}" on Wikipedia...`);
       const info = await searchWikipedia(celebrityName);
       
       if (info && (info.dateOfDeath || info.dateOfBirth)) {
+        console.log(`💾 Saving data for "${celebrityName}"...`);
+        
         // Only create record if we found useful data
         const record = {
           canonical_name: celebrityName,
@@ -291,27 +472,30 @@ async function processCelebrityPicks(supabase: any, logId: string) {
           .insert(record);
         
         if (insertError) {
-          console.error(`Error inserting ${celebrityName}:`, insertError);
+          console.error(`💥 Error inserting "${celebrityName}":`, insertError);
         } else {
-          console.log(`Successfully added data for ${celebrityName}`);
+          console.log(`✅ Successfully added data for "${celebrityName}"`);
           dataUpdated++;
           
           // If person is dead, score matching picks
           if (info.dateOfDeath) {
+            console.log(`⚰️ "${celebrityName}" is deceased, scoring picks...`);
             await updateMatchingPicks(supabase, celebrityName, 2025, record);
           }
         }
       } else {
-        console.log(`Could not find useful data for ${celebrityName}`);
+        console.log(`❌ Could not find useful data for "${celebrityName}"`);
       }
       
       // Small delay to be polite to Wikipedia
       await new Promise(resolve => setTimeout(resolve, 1000));
       
     } catch (error) {
-      console.error(`Error processing ${celebrityName}:`, error);
+      console.error(`💥 Error processing "${celebrityName}":`, error);
     }
   }
+  
+  console.log(`\n📊 Processing complete: ${celebritiesProcessed} processed, ${dataUpdated} updated`);
   
   // Update log
   await supabase
@@ -362,6 +546,7 @@ async function updateMatchingPicks(supabase: any, celebrityName: string, gameYea
   
   if (picks && picks.length > 0) {
     const points = calculatePoints(deceased);
+    console.log(`🎯 Scoring ${picks.length} picks with ${points} points each`);
     
     for (const pick of picks) {
       await supabase
@@ -437,42 +622,20 @@ function calculatePoints(deceased: any): number {
 }
 
 serve(async (req) => {
-  console.log('Edge function called with method:', req.method);
-  
   if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight request');
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    console.log('Processing request...');
-    
-    // Parse request body
-    let requestBody = {};
-    try {
-      requestBody = await req.json();
-      console.log('Request body:', requestBody);
-    } catch (e) {
-      console.log('No request body or invalid JSON');
-    }
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    console.log('Environment check:', {
-      hasUrl: !!supabaseUrl,
-      hasServiceKey: !!supabaseServiceKey
-    });
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing required environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-    }
-
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+    console.log(`🚀 Starting Wikipedia celebrity lookup function...`);
 
     // Create log entry
-    console.log('Creating log entry...');
-    const { data: logEntry, error: logError } = await supabaseClient
+    const { data: logEntry } = await supabaseClient
       .from('fetch_logs')
       .insert({
         status: 'running',
@@ -483,18 +646,10 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (logError) {
-      console.error('Error creating log entry:', logError);
-      throw logError;
-    }
-
-    console.log('Log entry created:', logEntry.id);
-    console.log('Starting Wikipedia celebrity lookup process...');
+    console.log(`📝 Created log entry: ${logEntry.id}`);
     
     // Process celebrity picks and lookup missing data
     const { celebritiesProcessed, dataUpdated } = await processCelebrityPicks(supabaseClient, logEntry.id);
-    
-    console.log(`Processed ${celebritiesProcessed} celebrities, updated ${dataUpdated} records`);
     
     // Complete the log
     await supabaseClient
@@ -505,7 +660,7 @@ serve(async (req) => {
       })
       .eq('id', logEntry.id);
     
-    console.log('Wikipedia lookup completed successfully');
+    console.log(`🎉 Function completed successfully!`);
     
     return new Response(
       JSON.stringify({ 
@@ -521,34 +676,27 @@ serve(async (req) => {
       },
     )
   } catch (error) {
-    console.error('Error in Wikipedia celebrity lookup function:', error);
+    console.error('💥 Error in Wikipedia celebrity lookup function:', error);
     
     // Update log with error
-    try {
-      const supabaseClient = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      )
-      
-      await supabaseClient
-        .from('fetch_logs')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: error.message
-        })
-        .eq('status', 'running')
-        .order('started_at', { ascending: false })
-        .limit(1);
-    } catch (logUpdateError) {
-      console.error('Error updating log:', logUpdateError);
-    }
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+    
+    await supabaseClient
+      .from('fetch_logs')
+      .update({
+        status: 'failed',
+        completed_at: new Date().toISOString(),
+        error_message: error.message
+      })
+      .eq('status', 'running')
+      .order('started_at', { ascending: false })
+      .limit(1);
     
     return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        details: 'Check the function logs for more information'
-      }),
+      JSON.stringify({ error: error.message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
